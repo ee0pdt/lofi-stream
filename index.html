@@ -1287,7 +1287,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         // Reverb
         reverbNode = actx.createConvolver();
         reverbGain = actx.createGain();
-        reverbGain.gain.value = 0.45;
+        reverbGain.gain.value = 0.3;
         dryGain = actx.createGain();
         dryGain.gain.value = 0.68;
         analyser = actx.createAnalyser();
