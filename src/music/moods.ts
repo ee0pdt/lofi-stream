@@ -1,0 +1,65 @@
+import type { Mood, MoodMeta } from "../types.ts";
+
+/**
+ * Per-mood timbral + harmonic configuration. Values must match the inline
+ * `MOOD_META` definition in `index.html` until the inline script is
+ * removed in a later phase.
+ */
+export const MOOD_META: Record<Mood, MoodMeta> = {
+  rainy: {
+    bpmRange: [62, 72],
+    swingRange: [0.07, 0.12],
+    names: ["grey afternoon", "window seat", "soft rain"],
+    key_pool: [0, 2, 3, 5, 9],
+    reverb: { dur: 3.2, decay: 0.5 },
+    snareFreq: 2200,
+    snareQ: 0.5,
+    bassFilter: 280,
+    bassAttack: 0.02,
+    compTimbre: "rhodes",
+    melTimbre: "rhodes",
+    ambience: "rain",
+  },
+  late: {
+    bpmRange: [65, 75],
+    swingRange: [0.06, 0.1],
+    names: ["3am brew", "city lights", "last bus"],
+    key_pool: [0, 2, 5, 7, 9],
+    reverb: { dur: 4.0, decay: 0.42 },
+    snareFreq: 2600,
+    snareQ: 0.7,
+    bassFilter: 200,
+    bassAttack: 0.03,
+    compTimbre: "vibraphone",
+    melTimbre: "vibraphone",
+    ambience: "traffic",
+  },
+  cafe: {
+    bpmRange: [70, 80],
+    swingRange: [0.04, 0.07],
+    names: ["warm espresso", "cosy corner", "notebook"],
+    key_pool: [0, 4, 5, 7, 9],
+    reverb: { dur: 1.4, decay: 0.72 },
+    snareFreq: 3000,
+    snareQ: 0.9,
+    bassFilter: 400,
+    bassAttack: 0.01,
+    compTimbre: "guitar",
+    melTimbre: "rhodes",
+    ambience: "room",
+  },
+  sleepy: {
+    bpmRange: [55, 65],
+    swingRange: [0.09, 0.14],
+    names: ["almost asleep", "blanket hour", "dim lamp"],
+    key_pool: [0, 2, 3, 5, 8],
+    reverb: { dur: 5.0, decay: 0.35 },
+    snareFreq: 1800,
+    snareQ: 0.4,
+    bassFilter: 180,
+    bassAttack: 0.04,
+    compTimbre: "pad",
+    melTimbre: "celesta",
+    ambience: "wind",
+  },
+};
