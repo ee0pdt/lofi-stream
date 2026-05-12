@@ -17,8 +17,11 @@ lands)_
 
 1. Install [Deno](https://deno.com)
 2. Clone this repo
-3. _Until Phase 2 of the migration lands:_ open `index.html` directly in a browser
-4. _After Phase 2:_ `deno task dev`, then open http://localhost:8000
+3. `deno task dev`, then open <http://localhost:8000>
+
+The app uses native ES modules and is served from the build output in `dist/`. Opening `index.html`
+directly from the filesystem (`file://`) will not work in modern browsers; use the dev server or the
+deployed GH Pages URL.
 
 ## Contributing
 
