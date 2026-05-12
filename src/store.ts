@@ -9,11 +9,7 @@
 
 type Listener<U> = (next: U, prev: U) => void;
 
-interface Subscription<T, U> {
-  selector: (state: T) => U;
-  listener: Listener<U>;
-  lastValue: U;
-}
+type Notifier<T> = (state: T) => void;
 
 export interface Store<T> {
   get(): T;
@@ -26,8 +22,7 @@ export interface Store<T> {
 
 export function createStore<T extends object>(initial: T): Store<T> {
   let state: T = initial;
-  // deno-lint-ignore no-explicit-any
-  const subs = new Set<Subscription<T, any>>();
+  const subs = new Set<Notifier<T>>();
 
   function get(): T {
     return state;
@@ -38,28 +33,25 @@ export function createStore<T extends object>(initial: T): Store<T> {
   ): void {
     const next = typeof partial === "function" ? partial(state) : partial;
     state = { ...state, ...next };
-    for (const sub of subs) {
-      const newValue = sub.selector(state);
-      if (!Object.is(newValue, sub.lastValue)) {
-        const prev = sub.lastValue;
-        sub.lastValue = newValue;
-        sub.listener(newValue, prev);
-      }
-    }
+    for (const notify of subs) notify(state);
   }
 
   function subscribe<U>(
     selector: (state: T) => U,
     listener: Listener<U>,
   ): () => void {
-    const sub: Subscription<T, U> = {
-      selector,
-      listener,
-      lastValue: selector(state),
+    let lastValue = selector(state);
+    const notify: Notifier<T> = (s) => {
+      const newValue = selector(s);
+      if (!Object.is(newValue, lastValue)) {
+        const prev = lastValue;
+        lastValue = newValue;
+        listener(newValue, prev);
+      }
     };
-    subs.add(sub);
+    subs.add(notify);
     return () => {
-      subs.delete(sub);
+      subs.delete(notify);
     };
   }
 

@@ -50,6 +50,18 @@ Deno.test("store.subscribe does NOT fire when an unselected slice changes", () =
   assertEquals(events, []);
 });
 
+Deno.test("store.subscribe does NOT fire when selector returns the same primitive", () => {
+  const store = createStore<TestState>(initial());
+  const events: number[] = [];
+  store.subscribe(
+    (s) => s.count,
+    (next) => events.push(next),
+  );
+  store.set({ count: 0 }); // same as initial — selector returns same primitive
+  store.set({ count: 0 }); // set again with same value
+  assertEquals(events, []);
+});
+
 Deno.test("store.subscribe returns an unsubscribe function", () => {
   const store = createStore<TestState>(initial());
   const events: number[] = [];

@@ -39,6 +39,8 @@ export function initialAppState(): AppState {
     isPlaying: false,
     complexity: moodSettings.rainy.complexity,
     moodSettings,
+    // Alias, not copy: slider writes go through currentSettings and must be
+    // observable on moodSettings[currentMood] for mood switches to persist.
     currentSettings: moodSettings.rainy,
   };
 }
