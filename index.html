@@ -1688,26 +1688,31 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
 
       // ── Tape hiss ─────────────────────────────────────────────────────────────────
       // Uses BufferSource (not deprecated ScriptProcessor) for proper Safari behaviour
+      // Each layer has two independent noise sources panned hard L/R so the
+      // hiss bed is decorrelated rather than collapsed mono in the center.
       function startTapeHiss() {
         [
           { freq: 5500, Q: 0.6, gain: 0.09 },
           { freq: 1800, Q: 0.4, gain: 0.035 },
         ].forEach(({ freq, Q, gain }) => {
-          const src = actx.createBufferSource();
-          src.buffer = noiseBuffer(4, true);
-          src.loop = true;
-          const hf = actx.createBiquadFilter();
-          hf.type = "bandpass";
-          hf.frequency.value = freq;
-          hf.Q.value = Q;
-          const hg = actx.createGain();
-          hg.gain.value = gain;
-          const sp = makeSpatial("hiss");
-          src.connect(hf);
-          hf.connect(hg);
-          hg.connect(sp.input);
-          sp.output.connect(trackGains.hiss);
-          src.start();
+          [-0.9, 0.9].forEach((panValue) => {
+            const src = actx.createBufferSource();
+            src.buffer = noiseBuffer(4, true);
+            src.loop = true;
+            const hf = actx.createBiquadFilter();
+            hf.type = "bandpass";
+            hf.frequency.value = freq;
+            hf.Q.value = Q;
+            const hg = actx.createGain();
+            hg.gain.value = gain;
+            const p = actx.createStereoPanner();
+            p.pan.value = panValue;
+            src.connect(hf);
+            hf.connect(hg);
+            hg.connect(p);
+            p.connect(trackGains.hiss);
+            src.start();
+          });
         });
       }
 
