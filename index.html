@@ -706,12 +706,19 @@
         FORMS,
         MOOD_META,
         DEFAULT_SETTINGS,
+        GHOST_PAT,
+        HAT_PAT,
+        KICK_PAT_NORMAL,
+        KICK_PAT_SOFT,
+        OPEN_PAT,
+        SNARE_PAT,
         bassOct,
         melodyOct,
         walkingBassNotes,
         nextFormPosition,
         currentSectionProg as currentSectionProgPure,
         DEFAULT_PROG,
+        generatePhrase,
       } from "./dist/main.js";
 
       Object.assign(window, {
@@ -719,11 +726,18 @@
         FORMS,
         MOOD_META,
         DEFAULT_SETTINGS,
+        GHOST_PAT,
+        HAT_PAT,
+        KICK_PAT_NORMAL,
+        KICK_PAT_SOFT,
+        OPEN_PAT,
+        SNARE_PAT,
         bassOct,
         melodyOct,
         walkingBassNotes,
         nextFormPosition,
         DEFAULT_PROG,
+        generatePhrase,
         // The pure module version of currentSectionProg takes (form, position).
         // The inline version is no-arg. We expose the pure one under a distinct
         // name so the inline `currentSectionProg` can wrap it without recursion.

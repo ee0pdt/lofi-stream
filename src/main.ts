@@ -14,6 +14,18 @@ export { bassOct, melodyOct } from "./music/octaves.ts";
 export { walkingBassNotes } from "./music/bass.ts";
 export { currentSectionProg, DEFAULT_PROG, nextFormPosition } from "./music/playhead.ts";
 
+export { generatePhrase } from "./music/phrase.ts";
+export type { Bar, GeneratePhraseOptions, Phrase, PhraseNote } from "./music/phrase.ts";
+
+export {
+  GHOST_PAT,
+  HAT_PAT,
+  KICK_PAT_NORMAL,
+  KICK_PAT_SOFT,
+  OPEN_PAT,
+  SNARE_PAT,
+} from "./music/drum-patterns.ts";
+
 export type {
   Ambience,
   Chord,
