@@ -654,6 +654,18 @@
           />
           <span class="mx-val" id="val-rain">40</span>
         </div>
+        <div class="mx-row">
+          <span class="mx-lbl">reverb</span>
+          <input
+            type="range"
+            id="reverbSlider"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0.3"
+          />
+          <span class="mx-val" id="val-reverb">30</span>
+        </div>
 
         <div class="mx-div"></div>
 
@@ -2640,6 +2652,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         ambience: 'input[data-track="ambience"]',
         warp: "#warpSlider",
         rain: "#rainSlider",
+        reverb: "#reverbSlider",
         complexity: "#complexitySlider",
         vol: "#volSlider",
       };
@@ -2684,6 +2697,11 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           if (rainGainNode) rainGainNode.gain.value = sliderToGain(val);
           return;
         }
+        if (key === "reverb") {
+          // wet level is a unitless mix ratio, not perceptual loudness — use raw value
+          if (reverbGain) reverbGain.gain.value = val;
+          return;
+        }
         if (key === "warp") {
           // warpModGain is summed-cents output. Scale by slider (linear, not log).
           if (warpModGain) warpModGain.gain.value = val;
@@ -2713,6 +2731,14 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         document.getElementById("val-rain").textContent = Math.round(val * 100);
         saveCurrentSetting("rain", val);
         if (rainGainNode) rainGainNode.gain.value = sliderToGain(val);
+      });
+
+      // Reverb wet
+      document.getElementById("reverbSlider").addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById("val-reverb").textContent = Math.round(val * 100);
+        saveCurrentSetting("reverb", val);
+        if (reverbGain) reverbGain.gain.value = val;
       });
 
       // Warp (wow + flutter intensity)

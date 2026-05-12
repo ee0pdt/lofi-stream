@@ -82,6 +82,7 @@ export interface Settings {
   readonly warp: number;
   readonly ambience: number;
   readonly rain: number;
+  readonly reverb: number;
   readonly complexity: number;
   readonly vol: number;
 }
