@@ -1184,14 +1184,12 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       let formBarInProg = 0; // chord cycle position within current section's prog
 
       function currentSectionProg() {
-        if (!currentForm.length)
-          return [
-            [0, "min7"],
-            [5, "min7"],
-            [8, "maj7"],
-            [3, "min7"],
-          ];
-        return currentForm[formSectionIdx % currentForm.length].prog;
+        // Delegate to the pure module helper; supply the inline mutable
+        // playhead state as the position argument.
+        return window.currentSectionProgPure(currentForm, {
+          sectionIdx: formSectionIdx,
+          barInSection: formBarInSection,
+        });
       }
 
       function advanceFormPlayhead() {
