@@ -86,3 +86,60 @@ export interface Settings {
   readonly complexity: number;
   readonly vol: number;
 }
+
+/**
+ * Per-mood mutable mixer state. Same shape as `Settings` but mutable so
+ * sliders can write to it during runtime.
+ */
+export interface MoodSettings {
+  drums: number;
+  bass: number;
+  comp: number;
+  melody: number;
+  hiss: number;
+  scratches: number;
+  hum: number;
+  warp: number;
+  ambience: number;
+  rain: number;
+  reverb: number;
+  complexity: number;
+  vol: number;
+}
+
+/**
+ * Reactive application state held by the store. Audio node references and
+ * scheduler-internal state are intentionally NOT in here — see the design
+ * spec for rationale.
+ */
+export interface AppState {
+  currentMood: Mood;
+  isPlaying: boolean;
+  complexity: number;
+  moodSettings: Record<Mood, MoodSettings>;
+  currentSettings: MoodSettings;
+}
+
+/**
+ * Bag of audio node references built by `initAudio`. Owned by
+ * `src/audio/graph.ts` (created in a later commit) and passed explicitly
+ * to scheduler and cascade wirers. Functions that mutate audio (rebuild
+ * reverb IR, restart ambience, apply warp, apply setting) are exported
+ * as free functions from `audio/graph.ts` that take an `AudioRefs` as
+ * their first argument.
+ */
+export interface AudioRefs {
+  readonly actx: AudioContext;
+  readonly masterGain: GainNode;
+  readonly compressor: DynamicsCompressorNode;
+  readonly lowShelf: BiquadFilterNode;
+  readonly highShelf: BiquadFilterNode;
+  readonly dryGain: GainNode;
+  readonly wetGain: GainNode;
+  readonly convolver: ConvolverNode;
+  readonly analyser: AnalyserNode;
+  readonly trackGains: Record<string, GainNode>;
+  readonly warpModGain: GainNode;
+  readonly humGain: GainNode;
+  readonly ambienceGain: GainNode;
+}
