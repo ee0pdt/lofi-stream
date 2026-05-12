@@ -1210,64 +1210,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         }
       }
 
-      const MOOD_META = {
-        rainy: {
-          bpmRange: [62, 72],
-          swingRange: [0.07, 0.12],
-          names: ["grey afternoon", "window seat", "soft rain"],
-          key_pool: [0, 2, 3, 5, 9],
-          reverb: { dur: 3.2, decay: 0.5 }, // long, washed out
-          snareFreq: 2200,
-          snareQ: 0.5, // softer snare
-          bassFilter: 280,
-          bassAttack: 0.02, // round, slow bass
-          compTimbre: "rhodes", // warm Rhodes
-          melTimbre: "rhodes",
-          ambience: "rain",
-        },
-        late: {
-          bpmRange: [65, 75],
-          swingRange: [0.06, 0.1],
-          names: ["3am brew", "city lights", "last bus"],
-          key_pool: [0, 2, 5, 7, 9],
-          reverb: { dur: 4.0, decay: 0.42 }, // hall, very long
-          snareFreq: 2600,
-          snareQ: 0.7,
-          bassFilter: 200,
-          bassAttack: 0.03, // darker, slower
-          compTimbre: "vibraphone", // hollow muted piano
-          melTimbre: "vibraphone",
-          ambience: "traffic",
-        },
-        cafe: {
-          bpmRange: [70, 80],
-          swingRange: [0.04, 0.07],
-          names: ["warm espresso", "cosy corner", "notebook"],
-          key_pool: [0, 4, 5, 7, 9],
-          reverb: { dur: 1.4, decay: 0.72 }, // short room
-          snareFreq: 3000,
-          snareQ: 0.9, // brighter brushed
-          bassFilter: 400,
-          bassAttack: 0.01, // punchier
-          compTimbre: "guitar", // nylon guitar pluck
-          melTimbre: "rhodes",
-          ambience: "room",
-        },
-        sleepy: {
-          bpmRange: [55, 65],
-          swingRange: [0.09, 0.14],
-          names: ["almost asleep", "blanket hour", "dim lamp"],
-          key_pool: [0, 2, 3, 5, 8],
-          reverb: { dur: 5.0, decay: 0.35 }, // cavernous
-          snareFreq: 1800,
-          snareQ: 0.4, // very soft brush
-          bassFilter: 180,
-          bassAttack: 0.04, // very round
-          compTimbre: "pad", // soft pad wash
-          melTimbre: "celesta", // high, delicate
-          ambience: "wind",
-        },
-      };
 
       let actx, masterGain, analyser;
       let reverbNode, reverbGain, dryGain;
