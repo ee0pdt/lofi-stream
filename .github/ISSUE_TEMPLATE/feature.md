@@ -1,7 +1,7 @@
 ---
 name: Feature request
 about: Suggest something
-title: ''
+title: ""
 labels: enhancement
 ---
 
