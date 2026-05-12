@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+
+# Skip if deno is not installed locally (CI has it; some contributors might not)
+if ! command -v deno >/dev/null 2>&1; then
+  echo "pre-commit: deno not installed, skipping checks"
+  exit 0
+fi
+
+deno task check
+deno task test
