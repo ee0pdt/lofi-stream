@@ -654,6 +654,18 @@
           />
           <span class="mx-val" id="val-rain">40</span>
         </div>
+        <div class="mx-row">
+          <span class="mx-lbl">reverb</span>
+          <input
+            type="range"
+            id="reverbSlider"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0.3"
+          />
+          <span class="mx-val" id="val-reverb">30</span>
+        </div>
 
         <div class="mx-div"></div>
 
@@ -1216,7 +1228,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       let trackGains = {};
       let rainGainNode = null;
       let ambienceGain = null;
-      let spatialDrift = 0;
       let complexity = 0.5;
       let isPlaying = false,
         schedulerTimer = null;
@@ -1229,11 +1240,11 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
 
       const SPATIAL = {
         kick: { pan: 0.0, dist: 0.0 },
-        snare: { pan: 0.08, dist: 0.1 },
-        hat: { pan: 0.55, dist: 0.3 },
-        bass: { pan: -0.45, dist: 0.2 },
-        rhodesComp: { pan: 0.35, dist: 0.4 },
-        rhodesMel: { pan: -0.18, dist: 0.6 },
+        snare: { pan: 0.15, dist: 0.1 },
+        hat: { pan: 0.75, dist: 0.3 },
+        bass: { pan: -0.5, dist: 0.2 },
+        rhodesComp: { pan: 0.55, dist: 0.4 },
+        rhodesMel: { pan: -0.5, dist: 0.6 },
         hiss: { pan: 0.0, dist: 0.8 },
       };
 
@@ -1288,7 +1299,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         // Reverb
         reverbNode = actx.createConvolver();
         reverbGain = actx.createGain();
-        reverbGain.gain.value = 0.45;
+        reverbGain.gain.value = DEFAULT_SETTINGS[currentMood].reverb;
         dryGain = actx.createGain();
         dryGain.gain.value = 0.68;
         analyser = actx.createAnalyser();
@@ -1387,7 +1398,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         humLFO.start();
 
         startTapeHiss();
-        startDrift();
         startScratches();
 
         applyMoodSettings(currentMood);
@@ -1456,7 +1466,9 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         return b;
       }
 
-      function loopedNoise(freq, type, Q, gainVal, panVal, dest) {
+      // Builds: BufferSource(white noise, looped) -> biquad -> gain -> StereoPanner -> dest.
+      // Returns the source so callers can decide whether to track it for teardown.
+      function makeLoopedNoise(freq, type, Q, gainVal, panVal, dest) {
         const src = actx.createBufferSource();
         src.buffer = noiseBuffer(4, true);
         src.loop = true;
@@ -1473,7 +1485,13 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         g.connect(p);
         p.connect(dest);
         src.start();
-        currentAmbienceSources.push(src);
+        return src;
+      }
+
+      function loopedNoise(freq, type, Q, gainVal, panVal, dest) {
+        currentAmbienceSources.push(
+          makeLoopedNoise(freq, type, Q, gainVal, panVal, dest),
+        );
       }
 
       function buildAmbienceForMood(mood) {
@@ -1585,32 +1603,64 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       // ── Safari-safe spatial ───────────────────────────────────────────────────────
-      function makeSpatial(role, driftPan = 0) {
-        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
-        const pan = actx.createStereoPanner();
-        pan.pan.value = Math.max(
-          -1,
-          Math.min(1, s.pan + driftPan * Math.sin(spatialDrift * 0.3)),
-        );
-        const distGain = actx.createGain();
-        distGain.gain.value = 1 - s.dist * 0.55;
-        const distFilt = actx.createBiquadFilter();
-        distFilt.type = "lowpass";
-        distFilt.frequency.value = 18000 - s.dist * 12000;
-        distFilt.Q.value = 0.5;
-        distFilt.connect(distGain);
-        distGain.connect(pan);
-        return { input: distFilt, output: pan };
+      // Distance cue: lowpass + attenuation as a function of SPATIAL[role].dist.
+      // Shared by makeSpatial and makeHaasSpatial so both keep an identical
+      // near/far filter curve.
+      function makeDistanceChain(s) {
+        const filt = actx.createBiquadFilter();
+        filt.type = "lowpass";
+        filt.frequency.value = 18000 - s.dist * 12000;
+        filt.Q.value = 0.5;
+        const g = actx.createGain();
+        g.gain.value = 1 - s.dist * 0.55;
+        filt.connect(g);
+        return { input: filt, output: g };
       }
 
-      function startDrift() {
-        let t = 0;
-        setInterval(() => {
-          if (isPlaying) {
-            t += 0.05;
-            spatialDrift = t;
-          }
-        }, 50);
+      const clampPan = (v) => Math.max(-1, Math.min(1, v));
+
+      function makeSpatial(role) {
+        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
+        const dist = makeDistanceChain(s);
+        const pan = actx.createStereoPanner();
+        pan.pan.value = clampPan(s.pan);
+        dist.output.connect(pan);
+        return { input: dist.input, output: pan };
+      }
+
+      // Haas-style stereo widening: one side delayed ~12-18 ms (below echo
+      // perception threshold) so the listener perceives the source as wider
+      // without any audible motion.
+      function makeHaasSpatial(role, delayMs = 14) {
+        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
+        const dist = makeDistanceChain(s);
+
+        const width = 0.9;
+        const leftPan = actx.createStereoPanner();
+        leftPan.pan.value = clampPan(s.pan - width);
+        const rightPan = actx.createStereoPanner();
+        rightPan.pan.value = clampPan(s.pan + width);
+
+        // Equal-power half-gain on each side so L+R sums back to unity loudness.
+        const leftGain = actx.createGain();
+        leftGain.gain.value = Math.SQRT1_2;
+        const rightGain = actx.createGain();
+        rightGain.gain.value = Math.SQRT1_2;
+
+        const delay = actx.createDelay(0.05);
+        delay.delayTime.value = delayMs / 1000;
+
+        dist.output.connect(leftGain);
+        leftGain.connect(leftPan);
+        dist.output.connect(delay);
+        delay.connect(rightGain);
+        rightGain.connect(rightPan);
+
+        const out = actx.createGain();
+        leftPan.connect(out);
+        rightPan.connect(out);
+
+        return { input: dist.input, output: out };
       }
 
       // ── Vinyl scratch ─────────────────────────────────────────────────────────────
@@ -1662,27 +1712,18 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       // ── Tape hiss ─────────────────────────────────────────────────────────────────
-      // Uses BufferSource (not deprecated ScriptProcessor) for proper Safari behaviour
+      // Each EQ layer has two independent noise sources panned hard L/R so the
+      // hiss bed is decorrelated rather than collapsing mono in the centre.
+      // Sources are NOT tracked in currentAmbienceSources — hiss persists across
+      // mood changes, whereas ambience gets stopped on mood transition.
       function startTapeHiss() {
         [
           { freq: 5500, Q: 0.6, gain: 0.09 },
           { freq: 1800, Q: 0.4, gain: 0.035 },
         ].forEach(({ freq, Q, gain }) => {
-          const src = actx.createBufferSource();
-          src.buffer = noiseBuffer(4, true);
-          src.loop = true;
-          const hf = actx.createBiquadFilter();
-          hf.type = "bandpass";
-          hf.frequency.value = freq;
-          hf.Q.value = Q;
-          const hg = actx.createGain();
-          hg.gain.value = gain;
-          const sp = makeSpatial("hiss");
-          src.connect(hf);
-          hf.connect(hg);
-          hg.connect(sp.input);
-          sp.output.connect(trackGains.hiss);
-          src.start();
+          [-0.9, 0.9].forEach((panValue) => {
+            makeLoopedNoise(freq, "bandpass", Q, gain, panValue, trackGains.hiss);
+          });
         });
       }
 
@@ -1714,7 +1755,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(1800, time);
           filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
           filt.Q.value = 0.8;
-          const sp = makeSpatial(role, role === "rhodesMel" ? 0.12 : 0.04);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1750,7 +1791,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           g.gain.linearRampToValueAtTime(v, time + 0.005); // very fast attack
           g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
           g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4); // rings out
-          const sp = makeSpatial(role, 0.04);
+          const sp = makeHaasSpatial(role);
           o.connect(g);
           g.connect(sp.input);
           sp.output.connect(trackGains[trackKey]);
@@ -1789,7 +1830,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(5000, time);
           filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
           filt.Q.value = 0.5;
-          const sp = makeSpatial(role, 0.06);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1823,7 +1864,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.type = "lowpass";
           filt.frequency.value = 900;
           filt.Q.value = 0.4;
-          const sp = makeSpatial(role, 0.08);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1855,7 +1896,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         reverb2.buffer = buildIR(1.5, 0.6);
         const rv = actx.createGain();
         rv.gain.value = 0.5;
-        const sp = makeSpatial(role, 0.06);
+        const sp = makeHaasSpatial(role);
         o.connect(g);
         g.connect(sp.input);
         sp.output.connect(trackGains[trackKey]);
@@ -1902,7 +1943,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         g.gain.linearRampToValueAtTime(vel, time + m.bassAttack);
         g.gain.setValueAtTime(vel * 0.75, time + 0.1);
         g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.88);
-        const sp = makeSpatial("bass", 0.03);
+        const sp = makeSpatial("bass");
         o.connect(filt);
         o2.connect(filt);
         filt.connect(g);
@@ -1977,7 +2018,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         const g = actx.createGain();
         g.gain.setValueAtTime(vol, time);
         g.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
-        const sp = makeSpatial("snare", 0.03);
+        const sp = makeSpatial("snare");
         src.connect(filt);
         filt.connect(g);
         g.connect(sp.input);
@@ -2001,7 +2042,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         const g = actx.createGain();
         g.gain.setValueAtTime(vol * moodVol, time);
         g.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
-        const sp = makeSpatial("hat", 0.05);
+        const sp = makeSpatial("hat");
         src.connect(filt);
         filt.connect(g);
         g.connect(sp.input);
@@ -2610,6 +2651,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         ambience: 'input[data-track="ambience"]',
         warp: "#warpSlider",
         rain: "#rainSlider",
+        reverb: "#reverbSlider",
         complexity: "#complexitySlider",
         vol: "#volSlider",
       };
@@ -2654,6 +2696,11 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           if (rainGainNode) rainGainNode.gain.value = sliderToGain(val);
           return;
         }
+        if (key === "reverb") {
+          // wet level is a unitless mix ratio, not perceptual loudness — use raw value
+          if (reverbGain) reverbGain.gain.value = val;
+          return;
+        }
         if (key === "warp") {
           // warpModGain is summed-cents output. Scale by slider (linear, not log).
           if (warpModGain) warpModGain.gain.value = val;
@@ -2683,6 +2730,14 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         document.getElementById("val-rain").textContent = Math.round(val * 100);
         saveCurrentSetting("rain", val);
         if (rainGainNode) rainGainNode.gain.value = sliderToGain(val);
+      });
+
+      // Reverb wet
+      document.getElementById("reverbSlider").addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById("val-reverb").textContent = Math.round(val * 100);
+        saveCurrentSetting("reverb", val);
+        if (reverbGain) reverbGain.gain.value = val;
       });
 
       // Warp (wow + flutter intensity)
