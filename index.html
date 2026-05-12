@@ -685,7 +685,43 @@
       </div>
     </div>
 
+    <script type="module">
+      // Phase 4 bridge: import the modules built in Phases 2 and 3 and expose
+      // them on `window`, then signal readiness so the classic inline script
+      // (which is wrapped in a `lofi:ready` listener) can run.
+      import {
+        VOICINGS,
+        FORMS,
+        MOOD_META,
+        DEFAULT_SETTINGS,
+        bassOct,
+        melodyOct,
+        walkingBassNotes,
+        nextFormPosition,
+        currentSectionProg as currentSectionProgPure,
+        DEFAULT_PROG,
+      } from "./dist/main.js";
+
+      Object.assign(window, {
+        VOICINGS,
+        FORMS,
+        MOOD_META,
+        DEFAULT_SETTINGS,
+        bassOct,
+        melodyOct,
+        walkingBassNotes,
+        nextFormPosition,
+        DEFAULT_PROG,
+        // The pure module version of currentSectionProg takes (form, position).
+        // The inline version is no-arg. We expose the pure one under a distinct
+        // name so the inline `currentSectionProg` can wrap it without recursion.
+        currentSectionProgPure,
+      });
+
+      window.dispatchEvent(new Event("lofi:ready"));
+    </script>
     <script>
+      window.addEventListener("lofi:ready", () => {
       // ── Generative background — WebGPU flow field with Canvas2D fallback ──────────
 
       const bgCanvas = document.getElementById("bg");
@@ -3156,6 +3192,8 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         handle.addEventListener("mousedown", onStart);
         handle.addEventListener("touchstart", onStart, { passive: true });
       })();
+
+      }); // end window.addEventListener("lofi:ready", ...)
     </script>
   </body>
 </html>
