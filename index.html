@@ -1195,16 +1195,18 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       function advanceFormPlayhead() {
+        // Delegate the position-state transition to the pure module helper,
+        // then mirror the result into the inline mutable state. Side effects
+        // on a section change (clearing the phrase cache for melodic variety)
+        // stay here because they touch inline-only variables.
         formBarInProg++;
-        const section = currentForm[formSectionIdx % currentForm.length];
-        // Reset chord cycle each bar (prog cycles within the bar in scheduleBar)
-        // Actually: scheduleBar calls currentSectionProg() and uses currentProgIdx
-        // We advance the section when we've done enough bars
-        formBarInSection++;
-        if (formBarInSection >= section.bars) {
-          formBarInSection = 0;
-          formSectionIdx = (formSectionIdx + 1) % currentForm.length;
-          // Regenerate phrase on section change for melodic variety
+        const { position, sectionChanged } = window.nextFormPosition(
+          currentForm,
+          { sectionIdx: formSectionIdx, barInSection: formBarInSection },
+        );
+        formSectionIdx = position.sectionIdx;
+        formBarInSection = position.barInSection;
+        if (sectionChanged) {
           currentPhrase = [];
           phraseBarIdx = 0;
         }
