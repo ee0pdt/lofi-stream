@@ -1598,6 +1598,46 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         return { input: distFilt, output: pan };
       }
 
+      // Haas-style stereo widening: one side delayed ~12-18 ms (below echo
+      // perception threshold) so the listener perceives the source as wider
+      // without any audible motion.
+      function makeHaasSpatial(role, delayMs = 14) {
+        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
+        const distFilt = actx.createBiquadFilter();
+        distFilt.type = "lowpass";
+        distFilt.frequency.value = 18000 - s.dist * 12000;
+        distFilt.Q.value = 0.5;
+        const distGain = actx.createGain();
+        distGain.gain.value = 1 - s.dist * 0.55;
+        distFilt.connect(distGain);
+
+        const width = 0.9;
+        const leftPan = actx.createStereoPanner();
+        leftPan.pan.value = Math.max(-1, Math.min(1, s.pan - width));
+        const rightPan = actx.createStereoPanner();
+        rightPan.pan.value = Math.max(-1, Math.min(1, s.pan + width));
+
+        const leftGain = actx.createGain();
+        leftGain.gain.value = 0.7;
+        const rightGain = actx.createGain();
+        rightGain.gain.value = 0.7;
+
+        const delay = actx.createDelay(0.05);
+        delay.delayTime.value = delayMs / 1000;
+
+        distGain.connect(leftGain);
+        leftGain.connect(leftPan);
+        distGain.connect(delay);
+        delay.connect(rightGain);
+        rightGain.connect(rightPan);
+
+        const out = actx.createGain();
+        leftPan.connect(out);
+        rightPan.connect(out);
+
+        return { input: distFilt, output: out };
+      }
+
       // ── Vinyl scratch ─────────────────────────────────────────────────────────────
       function playVinylScratch() {
         if (!actx || !isPlaying) return;
@@ -1699,7 +1739,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(1800, time);
           filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
           filt.Q.value = 0.8;
-          const sp = makeSpatial(role);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1735,7 +1775,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           g.gain.linearRampToValueAtTime(v, time + 0.005); // very fast attack
           g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
           g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4); // rings out
-          const sp = makeSpatial(role);
+          const sp = makeHaasSpatial(role);
           o.connect(g);
           g.connect(sp.input);
           sp.output.connect(trackGains[trackKey]);
@@ -1774,7 +1814,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(5000, time);
           filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
           filt.Q.value = 0.5;
-          const sp = makeSpatial(role);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1808,7 +1848,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.type = "lowpass";
           filt.frequency.value = 900;
           filt.Q.value = 0.4;
-          const sp = makeSpatial(role);
+          const sp = makeHaasSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1840,7 +1880,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         reverb2.buffer = buildIR(1.5, 0.6);
         const rv = actx.createGain();
         rv.gain.value = 0.5;
-        const sp = makeSpatial(role);
+        const sp = makeHaasSpatial(role);
         o.connect(g);
         g.connect(sp.input);
         sp.output.connect(trackGains[trackKey]);
