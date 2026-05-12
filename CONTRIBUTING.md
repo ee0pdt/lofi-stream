@@ -10,9 +10,7 @@ Thanks for your interest in lofi-stream.
    ```bash
    git config core.hooksPath .githooks
    ```
-4. Run the app:
-   - Until Phase 2 lands: open `index.html` directly in a browser
-   - From Phase 2: `deno task dev`, then open http://localhost:8000
+4. Run the app: `deno task dev`, then open <http://localhost:8000>
 
 There is no `npm install`, no `node_modules`. Deno is the only tool.
 
