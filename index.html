@@ -20,29 +20,29 @@
       }
 
       :root {
-        –warm: #c97d40;
-        –warm2: #e8b07a;
-        –glass: rgba(10, 13, 18, 0.78);
-        –border: rgba(255, 255, 255, 0.07);
-        –text: rgba(255, 255, 255, 0.88);
-        –dim: rgba(255, 255, 255, 0.35);
-        –dimmer: rgba(255, 255, 255, 0.16);
-        –radius: 22px;
-        –mood-h: 28;
+        --warm: #c97d40;
+        --warm2: #e8b07a;
+        --glass: rgba(10, 13, 18, 0.78);
+        --border: rgba(255, 255, 255, 0.07);
+        --text: rgba(255, 255, 255, 0.88);
+        --dim: rgba(255, 255, 255, 0.35);
+        --dimmer: rgba(255, 255, 255, 0.16);
+        --radius: 22px;
+        --mood-h: 28;
         /* Smooth colour transitions on mood change */
         transition:
-          –warm 0.8s ease,
-          –warm2 0.8s ease;
+          --warm 0.8s ease,
+          --warm2 0.8s ease;
       }
 
       /* @property declarations let CSS custom properties animate smoothly */
-      @property –warm {
-        syntax: ‘<color>’;
+      @property --warm {
+        syntax: '<color>';
         inherits: true;
         initial-value: #c97d40;
       }
-      @property –warm2 {
-        syntax: ‘<color>’;
+      @property --warm2 {
+        syntax: '<color>';
         inherits: true;
         initial-value: #e8b07a;
       }
@@ -54,7 +54,7 @@
         overflow: hidden;
         background: #080c12;
         font-family:
-          ‘DM Mono’,
+          'DM Mono',
           monospace;
         -webkit-tap-highlight-color: transparent;
         user-select: none;
@@ -74,11 +74,11 @@
         left: 0;
         right: 0;
         z-index: 10;
-        background: var(–glass);
+        background: var(--glass);
         backdrop-filter: blur(32px) saturate(1.5);
         -webkit-backdrop-filter: blur(32px) saturate(1.5);
-        border-top: 1px solid var(–border);
-        border-radius: var(–radius) var(–radius) 0 0;
+        border-top: 1px solid var(--border);
+        border-radius: var(--radius) var(--radius) 0 0;
         padding-bottom: env(safe-area-inset-bottom, 16px);
         max-height: 92vh;
         overflow-y: auto;
@@ -92,7 +92,7 @@
       .handle {
         width: 36px;
         height: 4px;
-        background: var(–dimmer);
+        background: var(--dimmer);
         border-radius: 2px;
         margin: 12px auto 6px;
         cursor: grab;
@@ -100,7 +100,7 @@
       }
       .handle:active {
         cursor: grabbing;
-        background: var(–dim);
+        background: var(--dim);
       }
 
       .sheet-body {
@@ -120,11 +120,11 @@
       }
       .track-name {
         font-family:
-          ‘DM Serif Display’,
+          'DM Serif Display',
           serif;
         font-style: italic;
         font-size: clamp(1.1rem, 4.5vw, 1.4rem);
-        color: var(–text);
+        color: var(--text);
         line-height: 1.1;
         transition: opacity 0.4s;
         white-space: nowrap;
@@ -136,7 +136,7 @@
       }
       .track-sub {
         font-size: 0.6rem;
-        color: var(–dim);
+        color: var(--dim);
         letter-spacing: 0.08em;
         margin-top: 3px;
       }
@@ -147,7 +147,7 @@
         flex-direction: column;
         align-items: center;
         background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(–border);
+        border: 1px solid var(--border);
         border-radius: 10px;
         padding: 6px 12px;
         cursor: pointer;
@@ -160,15 +160,15 @@
       }
       .key-val {
         font-family:
-          ‘DM Serif Display’,
+          'DM Serif Display',
           serif;
         font-size: 1.1rem;
-        color: var(–warm);
+        color: var(--warm);
         line-height: 1;
       }
       .key-lbl {
         font-size: 0.5rem;
-        color: var(–dimmer);
+        color: var(--dimmer);
         letter-spacing: 0.12em;
         text-transform: uppercase;
         margin-top: 2px;
@@ -202,15 +202,15 @@
       }
       .mood-btn {
         font-family:
-          ‘DM Mono’,
+          'DM Mono',
           monospace;
         font-size: 0.62rem;
         letter-spacing: 0.06em;
         padding: 7px 13px;
         border-radius: 20px;
-        border: 1px solid var(–border);
+        border: 1px solid var(--border);
         background: rgba(255, 255, 255, 0.05);
-        color: var(–dim);
+        color: var(--dim);
         cursor: pointer;
         white-space: nowrap;
         flex-shrink: 0;
@@ -223,8 +223,8 @@
         opacity: 0.7;
       }
       .mood-btn.active {
-        background: var(–warm);
-        border-color: var(–warm);
+        background: var(--warm);
+        border-color: var(--warm);
         color: #1a0e04;
       }
 
@@ -233,14 +233,14 @@
         width: 58px;
         height: 58px;
         border-radius: 50%;
-        background: var(–warm);
+        background: var(--warm);
         border: none;
         cursor: pointer;
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 0 24px color-mix(in srgb, var(–warm) 35%, transparent);
+        box-shadow: 0 0 24px color-mix(in srgb, var(--warm) 35%, transparent);
         transition:
           transform 0.1s,
           box-shadow 0.1s,
@@ -248,7 +248,7 @@
       }
       .btn-play:active {
         transform: scale(0.91);
-        box-shadow: 0 0 12px color-mix(in srgb, var(–warm) 20%, transparent);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--warm) 20%, transparent);
       }
       .btn-play svg {
         width: 20px;
@@ -262,7 +262,7 @@
         height: 44px;
         border-radius: 50%;
         background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(–border);
+        border: 1px solid var(--border);
         cursor: pointer;
         flex-shrink: 0;
         display: flex;
@@ -276,7 +276,7 @@
       .btn-skip svg {
         width: 18px;
         height: 18px;
-        stroke: var(–dim);
+        stroke: var(--dim);
         fill: none;
         stroke-width: 1.8;
         stroke-linecap: round;
@@ -306,7 +306,7 @@
         width: 5px;
         height: 5px;
         border-radius: 50%;
-        background: var(–dimmer);
+        background: var(--dimmer);
         flex-shrink: 0;
         transition: background 0.3s;
       }
@@ -325,7 +325,7 @@
       }
       .status-txt {
         font-size: 0.55rem;
-        color: var(–dimmer);
+        color: var(--dimmer);
         letter-spacing: 0.12em;
         text-transform: uppercase;
       }
@@ -337,13 +337,13 @@
         width: 100%;
         background: transparent;
         border: none;
-        border-top: 1px solid var(–border);
+        border-top: 1px solid var(--border);
         padding: 10px 20px;
         font-family:
-          ‘DM Mono’,
+          'DM Mono',
           monospace;
         font-size: 0.58rem;
-        color: var(–dimmer);
+        color: var(--dimmer);
         letter-spacing: 0.14em;
         text-transform: uppercase;
         cursor: pointer;
@@ -354,12 +354,12 @@
         transition: color 0.15s;
       }
       .mixer-toggle:active {
-        color: var(–warm);
+        color: var(--warm);
       }
       .mixer-arrow {
         width: 16px;
         height: 16px;
-        stroke: var(–dimmer);
+        stroke: var(--dimmer);
         fill: none;
         stroke-width: 1.8;
         stroke-linecap: round;
@@ -387,24 +387,24 @@
       }
       .mx-lbl {
         font-size: 0.58rem;
-        color: var(–dim);
+        color: var(--dim);
         width: 64px;
         flex-shrink: 0;
         letter-spacing: 0.04em;
       }
 
-      /* Thumb flash — the range input’s knob pops when the instrument plays */
+      /* Thumb flash — the range input's knob pops when the instrument plays */
       .mx-row input[type="range"].flash::-webkit-slider-thumb {
         background: #fff;
         box-shadow:
-          0 0 6px var(–warm),
+          0 0 6px var(--warm),
           0 0 2px #fff;
         transform: scale(1.35);
       }
       .mx-row input[type="range"].flash::-moz-range-thumb {
         background: #fff;
         box-shadow:
-          0 0 6px var(–warm),
+          0 0 6px var(--warm),
           0 0 2px #fff;
         transform: scale(1.35);
       }
@@ -422,7 +422,7 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        background: var(–warm);
+        background: var(--warm);
         border: 2px solid rgba(0, 0, 0, 0.4);
         cursor: pointer;
         transition:
@@ -434,7 +434,7 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        background: var(–warm);
+        background: var(--warm);
         border: 2px solid rgba(0, 0, 0, 0.4);
         transition:
           transform 0.06s ease,
@@ -446,7 +446,7 @@
       }
       .mx-val {
         font-size: 0.58rem;
-        color: var(–dimmer);
+        color: var(--dimmer);
         width: 26px;
         text-align: right;
         flex-shrink: 0;
@@ -454,7 +454,7 @@
       }
       .mx-div {
         height: 1px;
-        background: var(–border);
+        background: var(--border);
         margin: 4px 0 10px;
       }
     </style>
@@ -469,7 +469,6 @@
     <div class="sheet" id="sheet">
       <div class="handle"></div>
       <div class="sheet-body">
-        ```
         <!-- Play + title + key -->
         <div class="info-row">
           <button class="btn-play" id="playBtn" aria-label="Play">
@@ -488,7 +487,7 @@
             <div class="track-sub" id="trackSub">tap play to begin</div>
           </div>
           <div class="key-chip" id="keyChip" title="Tap to change key">
-            <span class="key-val" id="keyVal">—</span>
+            <span class="key-val" id="keyVal">&mdash;</span>
             <span class="key-lbl">key</span>
           </div>
         </div>
@@ -524,7 +523,6 @@
           <div class="dot" id="dot"></div>
           <span class="status-txt" id="statusTxt">ready</span>
         </div>
-        ```
       </div>
 
       <!-- Controls panel -->
@@ -657,7 +655,6 @@
           <span class="mx-val" id="val-rain">40</span>
         </div>
 
-        ```
         <div class="mx-div"></div>
 
         <div class="mx-row">
@@ -671,7 +668,7 @@
             value="68"
             style="flex: 1"
           />
-          <span class="mx-val" id="bpmVal">—</span>
+          <span class="mx-val" id="bpmVal">&mdash;</span>
         </div>
         <div class="mx-row">
           <span class="mx-lbl">complexity</span>
@@ -685,7 +682,6 @@
           />
           <span class="mx-val" id="val-complexity">50</span>
         </div>
-        ```
       </div>
     </div>
 
@@ -1273,7 +1269,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
 
         // CAFÉ — 16 bars: AABB' — bouncy, shorter loop
         // A: bright major walking
-        // B: ii–V turnaround with chromatic lift
+        // B: ii--V turnaround with chromatic lift
         // B': chromatic ii, pushes back to A
         cafe: [
           {
@@ -2270,7 +2266,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       // We place: root on beat 1, chord tone on beat 2, approach note on beat 3,
       // leading tone (chromatic or diatonic) on beat 4 pointing to next root.
       function walkingBassNotes(rootMidi, voicing, nextRootMidi) {
-        // All notes in bass register (octave 2, MIDI 36–47)
+        // All notes in bass register (octave 2, MIDI 36--47)
         const bassOct = (m) => {
           let n = m;
           while (n > 47) n -= 12;
@@ -2295,7 +2291,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       // ── Melodic motif system ──────────────────────────────────────────────────────
       // A phrase is 4 bars. We generate a 4-bar melodic skeleton once per phrase
       // and replay it with small variations each time. Notes drawn from chord tones
-      // in the melody register (octave 4-5, MIDI 60–79).
+      // in the melody register (octave 4-5, MIDI 60--79).
 
       let currentPhrase = []; // array of 4 bar-melodies, each = array of {beat, midi, dur}
       let phraseBarIdx = 0; // which bar within the phrase we're on

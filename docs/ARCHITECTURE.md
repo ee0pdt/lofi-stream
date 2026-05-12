@@ -13,16 +13,6 @@ A user gesture is required before audio starts: `AudioContext` is created lazily
 
 WebGPU is used for the background when available (`navigator.gpu`); otherwise Canvas2D (`startCanvas2D()`). Both render into `#bg`.
 
-## Known file corruption (temporary — fixed in Phase 1)
-
-The HTML file has unicode contamination from a prior paste/edit. Phase 1 of the migration fixes this and the `scripts/check-unicode.ts` scanner prevents reintroduction:
-
-- **CSS custom properties use `–` (U+2013 en-dash) instead of `--`** — these are invalid CSS, browser silently drops every rule referencing them
-- **CSS strings use `'` `'` (U+2018/U+2019 smart quotes) instead of `'`** — font-family declarations and `@property` syntax descriptors
-- **Stray markdown code fences inside `<body>`** — render as visible text in the sheet UI
-
-Em-dashes (`—`) in comments are intentional decoration and harmless.
-
 ## Background renderer
 
 `tryWebGPU()` attempts a WebGPU pipeline with a fragment shader rendering 5 drifting Gaussian blobs over a base colour. Falls back to `startCanvas2D()` if WebGPU is unavailable. Both react to `bgAmplitude`, fed by the audio analyser via `updateBgAmplitude()`.

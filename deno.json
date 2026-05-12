@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint --permit-no-files",
+    "check": "deno run --allow-read scripts/check-unicode.ts && deno fmt --check && deno lint --permit-no-files",
     "test": "deno test -A",
     "fix": "deno fmt && deno lint --fix"
   },
