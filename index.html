@@ -2029,28 +2029,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       // For each bar we know: current chord root+voicing, and next chord root.
       // We place: root on beat 1, chord tone on beat 2, approach note on beat 3,
       // leading tone (chromatic or diatonic) on beat 4 pointing to next root.
-      function walkingBassNotes(rootMidi, voicing, nextRootMidi) {
-        // All notes in bass register (octave 2, MIDI 36--47)
-        const bassOct = (m) => {
-          let n = m;
-          while (n > 47) n -= 12;
-          while (n < 36) n += 12;
-          return n;
-        };
-        const root = bassOct(rootMidi);
-        // chord tones available
-        const chordTones = voicing.map((iv) => bassOct(rootMidi + iv));
-        // beat2: 3rd or 5th
-        const beat2 = chordTones[1] || chordTones[0];
-        // beat3: 5th or 7th — aim slightly toward next root
-        const beat3 = chordTones[2] || chordTones[1];
-        // beat4: chromatic approach to next root (semitone above or below)
-        const nextRoot = bassOct(nextRootMidi);
-        const diff = nextRoot - beat3;
-        // approach from a semitone below or above next root
-        const approach = diff > 0 ? nextRoot - 1 : nextRoot + 1;
-        return [root, beat2, beat3, approach];
-      }
 
       // ── Melodic motif system ──────────────────────────────────────────────────────
       // A phrase is 4 bars. We generate a 4-bar melodic skeleton once per phrase
