@@ -2060,13 +2060,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       let currentPhrase = []; // array of 4 bar-melodies, each = array of {beat, midi, dur}
       let phraseBarIdx = 0; // which bar within the phrase we're on
 
-      function melodyOct(m) {
-        let n = m;
-        while (n > 79) n -= 12;
-        while (n < 60) n += 12;
-        return n;
-      }
-
       function generatePhrase(prog) {
         currentPhrase = [];
         let lastNote = null;
