@@ -48,6 +48,21 @@ export type { SpatialConfig, SpatialPair } from "./audio/graph.ts";
 export { buildRainLayers, startAmbience, stopAmbience } from "./audio/ambience.ts";
 
 export {
+  cycleCurrentKey,
+  flushScheduler,
+  getCurrentBPM,
+  getCurrentKey,
+  newProgression,
+  resetSchedulerStateForMoodChange,
+  setCurrentBPM,
+  startScheduler,
+  stopScheduler,
+} from "./audio/scheduler.ts";
+
+export { createAmplitudeReader, mountBackground } from "./visual/background.ts";
+export { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
+
+export {
   beatDur,
   flashRow,
   midiToFreq,

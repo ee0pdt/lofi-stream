@@ -698,81 +698,46 @@
     </div>
 
     <script type="module">
-      // Phases 2-4 bridge: import the data + helpers, plus (commit C) the
-      // audio graph / instruments / ambience modules. Stash an AppState
-      // store on window so inline init can wire it up. Dispatch
-      // `lofi:ready` so the classic inline script (wrapped in a listener)
-      // can run.
+      // Bridge: import the module surface used by the inline script, expose
+      // it on window, build the AppState store, then dispatch lofi:ready
+      // so the classic inline script (wrapped in a listener) can run.
+      // Commit E will drop this bridge entirely.
       import {
-        applyMoodReverb,
         applySettingToAudio,
-        applyWarp,
-        bassOct,
-        buildRainLayers,
+        createAmplitudeReader,
         createStore,
-        currentSectionProg as currentSectionProgPure,
-        DEFAULT_PROG,
-        DEFAULT_SETTINGS,
-        FORMS,
-        generatePhrase,
-        GHOST_PAT,
-        HAT_PAT,
-        initAudio as initAudioPure,
+        cycleCurrentKey,
+        flushScheduler,
+        initAudio,
         initialAppState,
-        KICK_PAT_NORMAL,
-        KICK_PAT_SOFT,
-        melodyOct,
         MOOD_META,
-        nextFormPosition,
-        OPEN_PAT,
-        playBass,
-        playComp,
-        playHat,
-        playKick,
-        playMelody,
-        playSnare,
-        SNARE_PAT,
+        mountAnalyserVisualiser,
+        mountBackground,
+        newProgression,
+        readAccentRgb,
+        setCurrentBPM,
         startAmbience,
-        startScratches,
-        startTapeHiss,
+        startScheduler,
         stopAmbience,
-        VOICINGS,
-        walkingBassNotes,
+        stopScheduler,
       } from "./dist/main.js";
 
       Object.assign(window, {
-        applyMoodReverb,
         applySettingToAudioPure: applySettingToAudio,
-        applyWarpPure: applyWarp,
-        bassOct,
-        buildRainLayers,
-        currentSectionProgPure,
-        DEFAULT_PROG,
-        DEFAULT_SETTINGS,
-        FORMS,
-        generatePhrase,
-        GHOST_PAT,
-        HAT_PAT,
-        initAudioPure,
-        KICK_PAT_NORMAL,
-        KICK_PAT_SOFT,
-        melodyOct,
+        createAmplitudeReader,
+        cycleCurrentKey,
+        flushScheduler,
+        initAudioPure: initAudio,
         MOOD_META,
-        nextFormPosition,
-        OPEN_PAT,
-        playBassPure: playBass,
-        playCompPure: playComp,
-        playHatPure: playHat,
-        playKickPure: playKick,
-        playMelodyPure: playMelody,
-        playSnarePure: playSnare,
-        SNARE_PAT,
+        mountAnalyserVisualiser,
+        mountBackground,
+        newProgression,
+        readAccentRgb,
+        setCurrentBPM,
         startAmbience,
-        startScratches,
-        startTapeHiss,
+        startScheduler,
         stopAmbience,
-        VOICINGS,
-        walkingBassNotes,
+        stopScheduler,
       });
 
       window.__store = createStore(initialAppState());
@@ -780,508 +745,26 @@
     </script>
     <script>
       window.addEventListener("lofi:ready", () => {
-      // ── Generative background — WebGPU flow field with Canvas2D fallback ──────────
 
+      // ── Visual bootstrap: background + frequency-band visualiser ──────────────────
       const bgCanvas = document.getElementById("bg");
-      let bgMood = "rainy";
-      let bgAmplitude = 0;
-
-      const MOOD_COLOURS = {
-        rainy: { h: 210, s: 40, r: 10, g: 15, b: 24 },
-        late: { h: 260, s: 30, r: 13, g: 10, b: 24 },
-        cafe: { h: 28, s: 55, r: 20, g: 10, b: 4 },
-        sleepy: { h: 190, s: 35, r: 6, g: 14, b: 18 },
-      };
-
-      // ── Try WebGPU ────────────────────────────────────────────────────────────────
-      async function tryWebGPU() {
-        try {
-          if (!navigator.gpu) return false;
-          const adapter = await navigator.gpu.requestAdapter();
-          if (!adapter) return false;
-          const device = await adapter.requestDevice();
-          const ctx = bgCanvas.getContext("webgpu");
-          if (!ctx) return false;
-
-          const format = navigator.gpu.getPreferredCanvasFormat();
-
-          function resize() {
-            const w = window.visualViewport?.width || window.innerWidth;
-            const h = window.visualViewport?.height || window.innerHeight;
-            bgCanvas.width = Math.max(2, Math.floor(w * devicePixelRatio));
-            bgCanvas.height = Math.max(2, Math.floor(h * devicePixelRatio));
-            bgCanvas.style.width = w + "px";
-            bgCanvas.style.height = h + "px";
-            ctx.configure({ device, format, alphaMode: "opaque" });
-          }
-          resize();
-          window.addEventListener("resize", resize);
-          window.addEventListener("orientationchange", () =>
-            setTimeout(resize, 200),
-          );
-          if (window.visualViewport) {
-            window.visualViewport.addEventListener("resize", resize);
-          }
-
-          // Uniforms layout (std140-ish, padded to 16-byte boundaries):
-          // time, amp, w, h          (4 floats = 16 bytes)
-          // baseR, baseG, baseB, _p1 (4 floats = 16 bytes)
-          // 3 blob colours: each vec4(r,g,b,intensity) = 48 bytes
-          // Total = 80 bytes
-          const uniformBuf = device.createBuffer({
-            size: 96,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-          });
-
-          const shaderCode = `
-struct Uniforms {
-  time: f32, amp: f32, w: f32, h: f32,
-  base: vec4f,
-  blob0: vec4f,
-  blob1: vec4f,
-  blob2: vec4f,
-}
-@group(0) @binding(0) var<uniform> u: Uniforms;
-
-struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
-
-@vertex fn vs(@builtin(vertex_index) vi: u32) -> VO {
-  // Fullscreen triangle
-  var positions = array<vec2f, 3>(
-    vec2f(-1.0, -1.0),
-    vec2f( 3.0, -1.0),
-    vec2f(-1.0,  3.0),
-  );
-  let p = positions[vi];
-  var out: VO;
-  out.pos = vec4f(p, 0.0, 1.0);
-  out.uv = vec2f((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5);
-  return out;
-}
-
-fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
-  let d = distance(uv, vec2f(cx, cy));
-  let n = d / r;
-  return exp(-n * n * 2.5);
-}
-
-@fragment fn fs(in: VO) -> @location(0) vec4f {
-  let uv = in.uv;
-  let t = u.time;
-  let amp = u.amp;
-
-  // 5 blob centres, each drifting slowly
-  // Weighted to upper portion of screen (cy < 0.5)
-  let cx0 = 0.25 + sin(t * 0.55 + 0.1) * 0.18;
-  let cy0 = 0.20 + cos(t * 0.48 + 1.3) * 0.14;
-  let cx1 = 0.72 + sin(t * 0.52 + 2.1) * 0.18;
-  let cy1 = 0.24 + cos(t * 0.58 + 0.7) * 0.14;
-  let cx2 = 0.50 + sin(t * 0.45 + 4.2) * 0.22;
-  let cy2 = 0.35 + cos(t * 0.53 + 2.9) * 0.16;
-  let cx3 = 0.18 + sin(t * 0.60 + 3.3) * 0.16;
-  let cy3 = 0.42 + cos(t * 0.50 + 5.1) * 0.14;
-  let cx4 = 0.82 + sin(t * 0.57 + 5.7) * 0.16;
-  let cy4 = 0.32 + cos(t * 0.46 + 4.4) * 0.14;
-
-  // Radius pulses gently and reacts to audio
-  let r0 = 0.28 * (0.88 + 0.12 * sin(t * 1.0) + amp * 0.22);
-  let r1 = 0.32 * (0.90 + 0.10 * sin(t * 1.1 + 1.0) + amp * 0.20);
-  let r2 = 0.40 * (0.86 + 0.14 * sin(t * 0.85 + 2.0) + amp * 0.25);
-  let r3 = 0.26 * (0.89 + 0.11 * sin(t * 0.95 + 3.0) + amp * 0.22);
-  let r4 = 0.30 * (0.87 + 0.13 * sin(t * 1.05 + 4.0) + amp * 0.20);
-
-  let f0 = blobField(uv, cx0, cy0, r0);
-  let f1 = blobField(uv, cx1, cy1, r1);
-  let f2 = blobField(uv, cx2, cy2, r2);
-  let f3 = blobField(uv, cx3, cy3, r3);
-  let f4 = blobField(uv, cx4, cy4, r4);
-
-  // Mix three colours across blobs (cycle through them)
-  let col0 = u.blob0.rgb * u.blob0.a * (f0 + f3 * 0.6);
-  let col1 = u.blob1.rgb * u.blob1.a * (f1 + f4 * 0.6);
-  let col2 = u.blob2.rgb * u.blob2.a * f2;
-
-  let blended = u.base.rgb + col0 + col1 + col2;
-
-  // Subtle vignette toward bottom — keeps focus on upper portion
-  let vignette = 1.0 - smoothstep(0.5, 1.0, uv.y) * 0.25;
-
-  return vec4f(blended * vignette, 1.0);
-}
-`;
-
-          const shader = device.createShaderModule({ code: shaderCode });
-
-          const bgl = device.createBindGroupLayout({
-            entries: [
-              {
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                buffer: { type: "uniform" },
-              },
-            ],
-          });
-
-          const bindGroup = device.createBindGroup({
-            layout: bgl,
-            entries: [{ binding: 0, resource: { buffer: uniformBuf } }],
-          });
-
-          const pipeline = device.createRenderPipeline({
-            layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
-            vertex: { module: shader, entryPoint: "vs" },
-            fragment: {
-              module: shader,
-              entryPoint: "fs",
-              targets: [{ format }],
-            },
-            primitive: { topology: "triangle-list" },
-          });
-
-          // Convert hex/HSL palette to RGB triples for shader
-          function hslToRgb(h, s, l) {
-            s /= 100;
-            l /= 100;
-            const k = (n) => (n + h / 30) % 12;
-            const a = s * Math.min(l, 1 - l);
-            const f = (n) =>
-              l - a * Math.max(-1, Math.min(Math.min(k(n) - 3, 9 - k(n)), 1));
-            return [f(0), f(8), f(4)];
-          }
-
-          const MOOD_GPU = {
-            rainy: {
-              base: [0.04, 0.07, 0.12],
-              blobs: [
-                [200, 55, 55, 0.45],
-                [230, 40, 40, 0.4],
-                [260, 30, 55, 0.3],
-              ],
-            },
-            late: {
-              base: [0.05, 0.04, 0.09],
-              blobs: [
-                [270, 45, 50, 0.45],
-                [300, 35, 45, 0.4],
-                [210, 30, 50, 0.32],
-              ],
-            },
-            cafe: {
-              base: [0.08, 0.04, 0.02],
-              blobs: [
-                [28, 60, 55, 0.5],
-                [15, 55, 50, 0.4],
-                [40, 50, 55, 0.32],
-              ],
-            },
-            sleepy: {
-              base: [0.02, 0.05, 0.07],
-              blobs: [
-                [190, 40, 50, 0.4],
-                [210, 30, 45, 0.36],
-                [170, 35, 50, 0.3],
-              ],
-            },
-          };
-
-          let t = 0;
-          function frameGPU() {
-            requestAnimationFrame(frameGPU);
-            t += 0.018; // ~3.6x faster than before
-            const m = MOOD_GPU[bgMood] || MOOD_GPU.rainy;
-            const blobs = m.blobs.map(([h, s, l, a]) => {
-              const [r, g, b] = hslToRgb(h, s, l);
-              return [r, g, b, a];
-            });
-            const uni = new Float32Array([
-              t,
-              bgAmplitude,
-              bgCanvas.width,
-              bgCanvas.height,
-              m.base[0],
-              m.base[1],
-              m.base[2],
-              0,
-              blobs[0][0],
-              blobs[0][1],
-              blobs[0][2],
-              blobs[0][3],
-              blobs[1][0],
-              blobs[1][1],
-              blobs[1][2],
-              blobs[1][3],
-              blobs[2][0],
-              blobs[2][1],
-              blobs[2][2],
-              blobs[2][3],
-            ]);
-            device.queue.writeBuffer(uniformBuf, 0, uni);
-
-            const cmd = device.createCommandEncoder();
-            const rp = cmd.beginRenderPass({
-              colorAttachments: [
-                {
-                  view: ctx.getCurrentTexture().createView(),
-                  clearValue: { r: 0, g: 0, b: 0, a: 1 },
-                  loadOp: "clear",
-                  storeOp: "store",
-                },
-              ],
-            });
-            rp.setPipeline(pipeline);
-            rp.setBindGroup(0, bindGroup);
-            rp.draw(3);
-            rp.end();
-            device.queue.submit([cmd.finish()]);
-          }
-          frameGPU();
-          return true;
-        } catch (e) {
-          console.warn("WebGPU failed, using Canvas2D fallback:", e);
-          return false;
-        }
-      }
-
-      // ── Canvas2D fallback ─────────────────────────────────────────────────────────
-      function startCanvas2D() {
-        const bgCtx = bgCanvas.getContext("2d");
-
-        const MOOD_PALETTE = {
-          rainy: {
-            base: "#0a1320",
-            blobs: [
-              [200, 55, 55],
-              [230, 40, 40],
-              [260, 30, 55],
-            ],
-          }, // blues, soft purple
-          late: {
-            base: "#0c0918",
-            blobs: [
-              [270, 45, 50],
-              [300, 35, 45],
-              [210, 30, 50],
-            ],
-          }, // purples, indigo
-          cafe: {
-            base: "#140a04",
-            blobs: [
-              [28, 60, 55],
-              [15, 55, 50],
-              [40, 50, 55],
-            ],
-          }, // warm amber/orange
-          sleepy: {
-            base: "#060e12",
-            blobs: [
-              [190, 40, 50],
-              [210, 30, 45],
-              [170, 35, 50],
-            ],
-          }, // teals
-        };
-
-        // Each blob: position (x,y) in normalised coords, radius, drift speed/phase, color index
-        const NUM_BLOBS = 5;
-        const blobs = Array.from({ length: NUM_BLOBS }, (_, i) => ({
-          cx: 0.2 + Math.random() * 0.6,
-          cy: 0.15 + Math.random() * 0.35, // weighted to upper portion
-          r: 0.35 + Math.random() * 0.25,
-          speedX: (Math.random() - 0.5) * 0.00015,
-          speedY: (Math.random() - 0.5) * 0.00012,
-          phaseX: Math.random() * Math.PI * 2,
-          phaseY: Math.random() * Math.PI * 2,
-          rPhase: Math.random() * Math.PI * 2,
-          colIdx: i % 3,
-        }));
-
-        let bt = 0;
-
-        function frame() {
-          requestAnimationFrame(frame);
-          bt += 0.02; // 4x faster
-          const dpr = window.devicePixelRatio || 1;
-          const W = bgCanvas.width / dpr;
-          const H = bgCanvas.height / dpr;
-          if (W < 2 || H < 2) return;
-
-          const palette = MOOD_PALETTE[bgMood] || MOOD_PALETTE.rainy;
-
-          // Base fill
-          bgCtx.globalCompositeOperation = "source-over";
-          bgCtx.fillStyle = palette.base;
-          bgCtx.fillRect(0, 0, W, H);
-
-          // Draw blobs in 'lighter' mode for soft glow accumulation
-          bgCtx.globalCompositeOperation = "lighter";
-
-          const amp = bgAmplitude;
-
-          blobs.forEach((b, i) => {
-            // Faster drift, wider travel
-            const driftX = Math.sin(bt * 0.5 + b.phaseX) * 0.18;
-            const driftY = Math.cos(bt * 0.42 + b.phaseY) * 0.14;
-            const cx = (b.cx + driftX) * W;
-            const cy = (b.cy + driftY) * H;
-            // Radius pulses faster and reacts more to audio
-            const rBase = b.r * Math.min(W, H);
-            const rPulse =
-              0.85 + 0.15 * Math.sin(bt * 0.9 + b.rPhase) + amp * 0.25;
-            const radius = rBase * rPulse;
-
-            const [h, s, l] = palette.blobs[b.colIdx];
-            // Alpha intensity at centre
-            const intensity = 0.18 + amp * 0.08;
-
-            const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-            grad.addColorStop(0, `hsla(${h},${s}%,${l}%,${intensity})`);
-            grad.addColorStop(
-              0.45,
-              `hsla(${h},${s}%,${l}%,${intensity * 0.35})`,
-            );
-            grad.addColorStop(1, `hsla(${h},${s}%,${l}%,0)`);
-            bgCtx.fillStyle = grad;
-            bgCtx.fillRect(0, 0, W, H);
-          });
-
-          bgCtx.globalCompositeOperation = "source-over";
-
-          // Subtle grain — very faint noise overlay for texture
-          if (Math.random() < 0.3) {
-            bgCtx.fillStyle = "rgba(255,255,255,0.008)";
-            for (let n = 0; n < 80; n++) {
-              bgCtx.fillRect(Math.random() * W, Math.random() * H, 1, 1);
-            }
-          }
-        }
-
-        function resizeBg() {
-          const dpr = window.devicePixelRatio || 1;
-          const w = window.visualViewport?.width || window.innerWidth;
-          const h = window.visualViewport?.height || window.innerHeight;
-          bgCanvas.width = Math.max(2, Math.floor(w * dpr));
-          bgCanvas.height = Math.max(2, Math.floor(h * dpr));
-          bgCanvas.style.width = w + "px";
-          bgCanvas.style.height = h + "px";
-          bgCtx.resetTransform();
-          bgCtx.scale(dpr, dpr);
-        }
-        resizeBg();
-        [0, 100, 300, 800].forEach((t) => setTimeout(resizeBg, t));
-        window.addEventListener("resize", resizeBg);
-        window.addEventListener("orientationchange", () =>
-          setTimeout(resizeBg, 250),
-        );
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener("resize", resizeBg);
-        }
-        frame();
-      }
-
-      // Try GPU, fall back to Canvas2D
-      tryWebGPU().then((ok) => {
-        if (!ok) startCanvas2D();
-      });
-
-      // Feed analyser amplitude into bg
-      function updateBgAmplitude() {
-        if (!analyser) {
-          bgAmplitude *= 0.92;
-          return;
-        }
-        const buf = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(buf);
-        const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
-        bgAmplitude = bgAmplitude * 0.85 + (avg / 255) * 0.15;
-      }
-      setInterval(updateBgAmplitude, 40);
-
-      // ── Audio ──────────────────────────────────────────────
-      const NOTES = [
-        "C",
-        "C#",
-        "D",
-        "D#",
-        "E",
-        "F",
-        "F#",
-        "G",
-        "G#",
-        "A",
-        "A#",
-        "B",
-      ];
-      function rand(a, b) {
-        return a + Math.random() * (b - a);
-      }
-      function randInt(a, b) {
-        return Math.floor(rand(a, b + 0.99));
-      }
-      function pick(a) {
-        return a[randInt(0, a.length - 1)];
-      }
-
-      // ── Composed forms ────────────────────────────────────────────────────────────
-      // Each mood is an explicit sequence of { bars, prog } sections.
-      // bars = how many bars this section lasts (each bar = 4 chords cycling)
-      // prog = the 4-chord sequence for that section
-      // Sections play in order then loop — no randomness in the form.
-      //
-      // Chord notation: [rootOffset, voicingName]
-      // rootOffset is semitones above the tonic chosen at newProgression()
-
-
-      // ── Form playhead ─────────────────────────────────────────────────────────────
-      // Instead of currentProg (a single prog), we track position in the full form.
-      let currentForm = []; // FORMS[currentMood]
-      let formSectionIdx = 0; // which section we're in
-      let formBarInSection = 0; // bar count within the current section
-      let formBarInProg = 0; // chord cycle position within current section's prog
-
-      function currentSectionProg() {
-        // Delegate to the pure module helper; supply the inline mutable
-        // playhead state as the position argument.
-        return window.currentSectionProgPure(currentForm, {
-          sectionIdx: formSectionIdx,
-          barInSection: formBarInSection,
-        });
-      }
-
-      function advanceFormPlayhead() {
-        // Delegate the position-state transition to the pure module helper,
-        // then mirror the result into the inline mutable state. Side effects
-        // on a section change (clearing the phrase cache for melodic variety)
-        // stay here because they touch inline-only variables.
-        formBarInProg++;
-        const { position, sectionChanged } = window.nextFormPosition(
-          currentForm,
-          { sectionIdx: formSectionIdx, barInSection: formBarInSection },
-        );
-        formSectionIdx = position.sectionIdx;
-        formBarInSection = position.barInSection;
-        if (sectionChanged) {
-          currentPhrase = [];
-          phraseBarIdx = 0;
-        }
-      }
-
+      const visCanvas = document.getElementById("vis");
+      const getAmp = window.createAmplitudeReader(() => window.__audio?.analyser ?? null);
+      window.mountBackground(bgCanvas, () => currentMood, getAmp);
+      window.mountAnalyserVisualiser(
+        visCanvas,
+        () => window.__audio?.analyser ?? null,
+        () => window.readAccentRgb(),
+      );
 
       // Inline audio refs: thin mirrors of fields on window.__audio (the
       // AudioRefs bag returned by the module initAudio). Kept for the
-      // slider handlers and scheduler that still live in inline scope.
-      // Commit E moves these readers into modules; this commit just
-      // shadows the bag.
-      let actx, masterGain, analyser, trackGains = {};
+      // slider handlers and crossfade that still live in inline scope.
+      // Commit E moves these readers into modules.
+      let actx, masterGain, trackGains = {};
       let rainGainNode = null, reverbGain = null, warpModGain = null;
-      let complexity = 0.5;
-      let isPlaying = false,
-        schedulerTimer = null;
-      let currentMood = "rainy",
-        currentKey = 0,
-        currentBPM = 75;
-      let currentProgIdx = 0;
-      let swingAmount = 0.08,
-        nextBarTime = 0;
+      let isPlaying = false;
+      let currentMood = "rainy";
 
       // ── Audio init + ambience: thin delegates to src/audio/ modules ──────────────
       function initAudio() {
@@ -1301,523 +784,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         applyMoodSettings(currentMood);
       }
 
-      function applyMoodReverb() {
-        window.applyMoodReverb(window.__audio, currentMood);
-        const r = window.MOOD_META[currentMood].swingRange;
-        swingAmount = r[0] + Math.random() * (r[1] - r[0]);
-      }
-
-      function stopAmbience() {
-        window.stopAmbience();
-      }
-
-      function startAmbience(mood) {
-        window.startAmbience(window.__audio, mood, window.__store);
-      }
-
-      // Inline thin wrappers — scheduler still calls these by name; they
-      // delegate to the module versions and pass the current mood/bpm.
-      function playComp(midi, time, dur, vel, role) {
-        window.playCompPure(
-          window.__audio,
-          midi,
-          time,
-          dur,
-          vel,
-          role,
-          currentMood,
-          currentBPM,
-        );
-      }
-      function playMelody(midi, time, dur, vel, role) {
-        window.playMelodyPure(
-          window.__audio,
-          midi,
-          time,
-          dur,
-          vel,
-          role,
-          currentMood,
-        );
-      }
-      function playBass(midi, time, dur, vel = 0.28) {
-        window.playBassPure(window.__audio, midi, time, dur, vel, currentMood);
-      }
-
-      // Drum thin wrappers — scheduler still calls these by name.
-      function playKick(time) {
-        window.playKickPure(window.__audio, time, currentMood);
-      }
-      function playSnare(time, ghost = false) {
-        window.playSnarePure(window.__audio, time, currentMood, ghost);
-      }
-      function playHat(time, open = false, vol = 0.06) {
-        window.playHatPure(window.__audio, time, currentMood, open, vol);
-      }
-
-      function beatDur() {
-        return 60 / currentBPM;
-      }
-      function swungTime(i, barStart) {
-        const sd = beatDur() / 4;
-        return barStart + i * sd + (i % 2 === 1 ? swingAmount * sd : 0);
-      }
-
-      // ── Walking bass line generator ───────────────────────────────────────────────
-      // For each bar we know: current chord root+voicing, and next chord root.
-      // We place: root on beat 1, chord tone on beat 2, approach note on beat 3,
-      // leading tone (chromatic or diatonic) on beat 4 pointing to next root.
-
-      // ── Melodic motif system ──────────────────────────────────────────────────────
-      // A phrase is 4 bars. We generate a 4-bar melodic skeleton once per phrase
-      // and replay it with small variations each time. Notes drawn from chord tones
-      // in the melody register (octave 4-5, MIDI 60--79).
-
-      let currentPhrase = []; // array of 4 bar-melodies, each = array of {beat, midi, dur}
-      let phraseBarIdx = 0; // which bar within the phrase we're on
-
-      function generatePhrase(prog) {
-        currentPhrase = [];
-        let lastNote = null;
-
-        prog.forEach(([rootOffset, voicingName], barIdx) => {
-          const voicing = VOICINGS[voicingName];
-          const rootMidi = 48 + ((currentKey + rootOffset) % 12);
-          const chordTones = voicing.map((iv) => melodyOct(rootMidi + iv));
-
-          const barMelody = [];
-          const isCall = barIdx < 2;
-
-          // Beat 1: anchor note — ALWAYS plays (this is the melodic skeleton)
-          // But at very low complexity, skip on response bars
-          const anchor = chordTones[isCall ? 1 : 0];
-          if (complexity > 0.15 || isCall) {
-            barMelody.push({ beat: 0, midi: anchor, dur: beatDur() * 0.85 });
-          }
-
-          // Beat 1.5 or 2: inner voice — only adds at mid+ complexity
-          if (Math.random() < 0.1 + complexity * 0.7) {
-            const inner = chordTones[2] || chordTones[1];
-            const time = beatDur() * (isCall ? 1.5 : 1);
-            barMelody.push({ beat: time, midi: inner, dur: beatDur() * 0.7 });
-          }
-
-          // Beat 2.5 or 3: colour note (7th) — ALWAYS adds at mid complexity, dropped at very low
-          if (complexity > 0.25) {
-            const colorNote = chordTones[3] || chordTones[2];
-            barMelody.push({
-              beat: beatDur() * (isCall ? 2.5 : 3),
-              midi: colorNote,
-              dur: beatDur() * 1.1,
-            });
-          }
-
-          // Beat 3.5 or 4 — extra passing note (only at high complexity)
-          if (Math.random() < (complexity - 0.5) * 1.2) {
-            const passing =
-              chordTones[Math.floor(Math.random() * chordTones.length)];
-            barMelody.push({
-              beat: beatDur() * (isCall ? 3.5 : 3.75),
-              midi: passing,
-              dur: beatDur() * 0.5,
-            });
-          }
-
-          // Anticipation pushback — more likely at higher complexity
-          if (
-            Math.random() < complexity * 0.6 &&
-            lastNote !== null &&
-            barMelody.length > 0
-          ) {
-            barMelody[0].beat = -beatDur() * 0.25;
-            barMelody[0].anticipation = true;
-          }
-
-          lastNote =
-            barMelody.length > 0 ? barMelody[barMelody.length - 1].midi : null;
-          currentPhrase.push(barMelody);
-        });
-        phraseBarIdx = 0;
-      }
-
-      function scheduleBar(barStart) {
-        const prog = currentSectionProg();
-        const progLen = prog.length;
-        const barIdx = currentProgIdx % progLen;
-        const [rootOffset, voicingName] = prog[barIdx];
-        const nextBarIdx = (barIdx + 1) % progLen;
-        const [nextRootOffset] = prog[nextBarIdx];
-
-        const voicing = VOICINGS[voicingName];
-        const rootMidi = 48 + ((currentKey + rootOffset) % 12);
-        const nextRoot = 48 + ((currentKey + nextRootOffset) % 12);
-
-        // ── Comp (mood-specific timbre) ──────────────────────────────────────────
-        const compOct = (m) => {
-          let n = m;
-          while (n > 71) n -= 12;
-          while (n < 48) n += 12;
-          return n;
-        };
-        const isPad = MOOD_META[currentMood].compTimbre === "pad";
-        const chordDur = beatDur() * (isPad ? 3.8 : 1.75);
-
-        voicing.forEach((interval, i) => {
-          const m = compOct(rootMidi + interval);
-          const vel = 0.11 - i * 0.015;
-          const strum = i * 0.02;
-          // Beat 1 — always play
-          playComp(m, barStart + strum, chordDur, vel, "rhodesComp");
-
-          // Beat 3 re-comp — appears at mid+ complexity
-          if (
-            !isPad &&
-            complexity > 0.3 &&
-            (i < voicing.length - 1 || Math.random() < complexity * 0.7)
-          ) {
-            playComp(
-              m,
-              barStart + beatDur() * 2 + strum * 0.5,
-              chordDur * 0.85,
-              vel * 0.6,
-              "rhodesComp",
-            );
-          }
-
-          // Extra stab on the & of 2 — only at HIGH complexity, top notes only
-          if (
-            !isPad &&
-            complexity > 0.7 &&
-            i >= voicing.length - 2 &&
-            Math.random() < (complexity - 0.5) * 1.2
-          ) {
-            playComp(
-              m,
-              barStart + beatDur() * 1.5 + strum * 0.3,
-              beatDur() * 0.4,
-              vel * 0.5,
-              "rhodesComp",
-            );
-          }
-        });
-
-        // ── Melody ───────────────────────────────────────────────────────────────
-        if (phraseBarIdx === 0 || currentPhrase.length === 0) {
-          generatePhrase(currentSectionProg());
-        }
-        const barMelody = currentPhrase[phraseBarIdx % currentPhrase.length];
-        barMelody.forEach((note) => {
-          const t = barStart + note.beat;
-          if (t >= barStart - 0.01) {
-            playMelody(note.midi, t, note.dur, 0.17, "rhodesMel");
-          }
-        });
-        const nextBarMelody =
-          currentPhrase[(phraseBarIdx + 1) % currentPhrase.length];
-        if (
-          nextBarMelody &&
-          nextBarMelody[0] &&
-          nextBarMelody[0].anticipation
-        ) {
-          playMelody(
-            nextBarMelody[0].midi,
-            barStart + beatDur() * 4 - beatDur() * 0.25,
-            nextBarMelody[0].dur,
-            0.14,
-            "rhodesMel",
-          );
-        }
-        phraseBarIdx++;
-
-        // ── Bass — complexity controls walking density ──────────────────────────
-        const bassNotes = walkingBassNotes(rootMidi, voicing, nextRoot);
-        bassNotes.forEach((m, i) => {
-          const vel = i === 0 ? 0.3 : 0.22;
-          // Sleepy mood always sparse regardless of complexity
-          if (currentMood === "sleepy" && i !== 0 && i !== 2) return;
-          // Low complexity: only beats 1 and 3 (no walking)
-          if (complexity < 0.3 && i !== 0 && i !== 2) return;
-          // Mid: skip beat 4 approach note
-          if (complexity < 0.55 && i === 3) return;
-          playBass(m, barStart + beatDur() * i, beatDur() * 0.88, vel);
-        });
-
-        // Bass ghost notes — only at high complexity
-        if (complexity > 0.7 && Math.random() < (complexity - 0.5) * 1.2) {
-          const ghostMidi = bassNotes[0];
-          playBass(
-            ghostMidi,
-            barStart + beatDur() * 3.5,
-            beatDur() * 0.3,
-            0.12,
-          );
-        }
-
-        // ── Drums — pattern density scales with complexity ──────────────────────
-        const kickPat =
-          currentMood === "sleepy" || currentMood === "late"
-            ? KICK_PAT_SOFT
-            : KICK_PAT_NORMAL;
-
-        for (let i = 0; i < 16; i++) {
-          const t = swungTime(i, barStart);
-
-          // Kick — full pattern always (but the SOFT pattern is already sparser)
-          if (kickPat[i]) playKick(t);
-
-          // Snare backbeat — always plays
-          if (SNARE_PAT[i]) playSnare(t, false);
-
-          // Ghost snares — scale with complexity
-          if (GHOST_PAT[i] && Math.random() < complexity * 0.7)
-            playSnare(t, true);
-
-          // Hi-hat — at low complexity, only on quarter beats (0,4,8,12)
-          // At mid+ complexity, full 8th-note pattern
-          if (HAT_PAT[i]) {
-            const isQuarter = i % 4 === 0;
-            if (isQuarter || complexity > 0.35) {
-              const vol = 0.05 + Math.random() * 0.025;
-              playHat(
-                t,
-                false,
-                vol * (isQuarter ? 1.0 : 0.6 + complexity * 0.4),
-              );
-            }
-          }
-
-          // 16th-note hi-hat flourishes (positions 1,3,5,7,9,11,13,15) — only at high complexity
-          if (
-            !HAT_PAT[i] &&
-            complexity > 0.75 &&
-            Math.random() < (complexity - 0.65) * 2
-          ) {
-            playHat(t, false, 0.025 + Math.random() * 0.02);
-          }
-
-          // Open hat — only at mid+ complexity (and never sleepy)
-          if (OPEN_PAT[i] && currentMood !== "sleepy" && complexity > 0.4) {
-            playHat(t, true, 0.06);
-          }
-        }
-      }
-
-      function scheduler() {
-        // 3s lookahead — survives Safari's ~1s background setTimeout throttle.
-        // Web Audio clock stays precise even when JS is throttled; we just need
-        // to have pre-scheduled far enough ahead before the tab is hidden.
-        const LOOKAHEAD = 3.0;
-        const barDur = beatDur() * 4;
-        while (nextBarTime < actx.currentTime + LOOKAHEAD) {
-          scheduleBar(nextBarTime);
-          // Advance chord cycle within current section
-          currentProgIdx++;
-          // Advance the form playhead once per bar
-          advanceFormPlayhead();
-          nextBarTime += barDur;
-        }
-        schedulerTimer = setTimeout(scheduler, 50);
-      }
-
-      // ── Background resilience ────────────────────────────────────────────────────
-      // On tab restore: resume AudioContext (Safari suspends it when hidden),
-      // then immediately flush the scheduler so the 3s buffer is refilled.
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState !== "visible" || !isPlaying) return;
-        if (actx && actx.state === "suspended") {
-          actx.resume().then(() => {
-            clearTimeout(schedulerTimer);
-            scheduler();
-          });
-        } else if (actx) {
-          clearTimeout(schedulerTimer);
-          scheduler();
-        }
-      });
-
-      function newProgression(fresh = true) {
-        const meta = MOOD_META[currentMood];
-        if (fresh) {
-          currentKey = pick(meta.key_pool);
-          currentBPM = randInt(...meta.bpmRange);
-          document.getElementById("bpmSlider").value = currentBPM;
-          // Reset form playhead to beginning
-          currentForm = FORMS[currentMood];
-          formSectionIdx = 0;
-          formBarInSection = 0;
-          formBarInProg = 0;
-          currentProgIdx = 0;
-          currentPhrase = [];
-          phraseBarIdx = 0;
-          applyMoodReverb();
-        } else {
-          // Soft refresh — keep key/BPM, just restart the form
-          currentForm = FORMS[currentMood];
-          formSectionIdx = 0;
-          formBarInSection = 0;
-          formBarInProg = 0;
-          currentProgIdx = 0;
-          currentPhrase = [];
-          phraseBarIdx = 0;
-        }
-        bgMood = currentMood;
-        const name = pick(meta.names),
-          keyName = NOTES[currentKey];
-        const el = document.getElementById("trackName");
-        el.classList.add("fade");
-        setTimeout(() => {
-          el.textContent = name;
-          document.getElementById("trackSub").textContent =
-            `${keyName} · ${currentBPM} bpm`;
-          document.getElementById("bpmVal").textContent = currentBPM;
-          document.getElementById("keyVal").textContent = keyName;
-          el.classList.remove("fade");
-        }, 400);
-      }
-
-      // ── Visualiser ────────────────────────────────────────────────────────────────
-      // Frequency-band bars with peak followers. Bigger, more visible, iOS-safe.
-      const visCv = document.getElementById("vis");
-      const visCtx = visCv.getContext("2d");
-
-      const NUM_BARS = 32;
-      const barPeaks = new Float32Array(NUM_BARS); // smoothed peak values
-      const barFalls = new Float32Array(NUM_BARS); // peak hold/drop markers
-
-      let visW = 0,
-        visH = 0;
-
-      function syncVisSize() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = visCv.getBoundingClientRect();
-        let cssW = rect.width;
-        if (cssW < 2) cssW = visCv.parentElement.getBoundingClientRect().width;
-        if (cssW < 2) cssW = window.innerWidth - 40;
-        const cssH = 56;
-        const newW = Math.max(4, Math.round(cssW * dpr));
-        const newH = Math.max(4, Math.round(cssH * dpr));
-        if (visCv.width !== newW) visCv.width = newW;
-        if (visCv.height !== newH) visCv.height = newH;
-        visW = newW;
-        visH = newH;
-      }
-
-      // ResizeObserver handles every layout shift natively — iOS supports it since 13.4
-      if (typeof ResizeObserver !== "undefined") {
-        new ResizeObserver(syncVisSize).observe(visCv);
-      }
-      // Belt-and-braces: poll a few times for iOS Safari which sometimes ignores RO at first paint
-      [0, 100, 300, 800, 2000].forEach((t) => setTimeout(syncVisSize, t));
-      window.addEventListener("resize", syncVisSize);
-      window.addEventListener("orientationchange", () =>
-        setTimeout(syncVisSize, 250),
-      );
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener("resize", syncVisSize);
-      }
-
-      function getAccentRgb() {
-        // Read --warm from CSS as rgb triple
-        const v = getComputedStyle(document.documentElement)
-          .getPropertyValue("--warm")
-          .trim();
-        // Could be hex (#rrggbb) or rgb(...)
-        if (v.startsWith("#")) {
-          const r = parseInt(v.slice(1, 3), 16);
-          const g = parseInt(v.slice(3, 5), 16);
-          const b = parseInt(v.slice(5, 7), 16);
-          return [r, g, b];
-        }
-        const m = v.match(/(\d+(?:\.\d+)?)/g);
-        if (m && m.length >= 3) return [+m[0], +m[1], +m[2]];
-        return [201, 125, 64];
-      }
-
-      function drawVis() {
-        requestAnimationFrame(drawVis);
-
-        // Self-heal: re-measure each frame in case layout shifted
-        if (visW < 4 || visH < 4) {
-          syncVisSize();
-          if (visW < 4) return;
-        }
-
-        const W = visW,
-          H = visH;
-        const [ar, ag, ab] = getAccentRgb();
-        // Lighter variant for top of bars
-        const lar = Math.min(255, ar + 31);
-        const lag = Math.min(255, ag + 51);
-        const lab = Math.min(255, ab + 58);
-
-        // Subtle background gradient
-        const bg = visCtx.createLinearGradient(0, 0, 0, H);
-        bg.addColorStop(0, "rgba(0,0,0,0.0)");
-        bg.addColorStop(1, "rgba(0,0,0,0.35)");
-        visCtx.fillStyle = bg;
-        visCtx.fillRect(0, 0, W, H);
-
-        if (!analyser) {
-          const t = performance.now() * 0.001;
-          const pulse = 0.2 + 0.15 * Math.sin(t * 1.2);
-          visCtx.fillStyle = `rgba(${ar},${ag},${ab},${pulse})`;
-          const barW = W / NUM_BARS;
-          for (let i = 0; i < NUM_BARS; i++) {
-            const idleH = (1 + Math.sin(t * 0.8 + i * 0.4)) * 2 + 1;
-            const x = i * barW;
-            visCtx.fillRect(
-              x + barW * 0.2,
-              H / 2 - idleH / 2,
-              barW * 0.6,
-              idleH,
-            );
-          }
-          return;
-        }
-
-        const binCount = analyser.frequencyBinCount;
-        const buf = new Uint8Array(binCount);
-        analyser.getByteFrequencyData(buf);
-
-        const barW = W / NUM_BARS;
-        const dpr = window.devicePixelRatio || 1;
-
-        for (let i = 0; i < NUM_BARS; i++) {
-          const fLo = Math.pow(i / NUM_BARS, 2);
-          const fHi = Math.pow((i + 1) / NUM_BARS, 2);
-          const binLo = Math.floor(fLo * binCount);
-          const binHi = Math.max(binLo + 1, Math.floor(fHi * binCount));
-          let sum = 0;
-          for (let b = binLo; b < binHi; b++) sum += buf[b];
-          const avg = sum / (binHi - binLo) / 255;
-
-          if (avg > barPeaks[i]) barPeaks[i] = barPeaks[i] * 0.3 + avg * 0.7;
-          else barPeaks[i] = barPeaks[i] * 0.86 + avg * 0.14;
-
-          if (barPeaks[i] > barFalls[i]) barFalls[i] = barPeaks[i];
-          else barFalls[i] = Math.max(barPeaks[i], barFalls[i] - 0.012);
-
-          const v = barPeaks[i];
-          const barH = v * H * 0.95;
-          const x = i * barW;
-          const padX = Math.max(1, barW * 0.18);
-
-          // Gradient fill — accent colour, lighter at top
-          const grad = visCtx.createLinearGradient(0, H - barH, 0, H);
-          grad.addColorStop(0, `rgba(${lar},${lag},${lab},${0.4 + v * 0.6})`);
-          grad.addColorStop(1, `rgba(${ar},${ag},${ab},${0.7 + v * 0.3})`);
-          visCtx.fillStyle = grad;
-          visCtx.fillRect(x + padX, H - barH, barW - padX * 2, barH);
-
-          // Peak marker
-          if (barFalls[i] > 0.05) {
-            const peakY = H - barFalls[i] * H * 0.95;
-            visCtx.fillStyle = `rgba(${lar},${lag},${lab},${0.6 + v * 0.4})`;
-            visCtx.fillRect(x + padX, peakY, barW - padX * 2, Math.max(1, dpr));
-          }
-        }
-      }
-      drawVis();
 
       // ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -1852,9 +818,9 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           masterGain.gain.setValueAtTime(masterGain.gain.value, t);
           masterGain.gain.linearRampToValueAtTime(0.0001, t + 0.5);
           setTimeout(() => {
-            clearTimeout(schedulerTimer);
+            window.stopScheduler();
             isPlaying = false;
-            stopAmbience();
+            window.stopAmbience();
           }, 520);
           setPlayIcon(false);
           document.getElementById("dot").className = "dot";
@@ -1864,11 +830,9 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           const t0 = actx.currentTime;
           masterGain.gain.cancelScheduledValues(t0);
           masterGain.gain.setValueAtTime(0.0001, t0);
-          newProgression(true);
-          nextBarTime = t0 + 0.1; // start scheduling immediately, 3s lookahead fills the buffer
           isPlaying = true;
-          scheduler();
-          startAmbience(currentMood);
+          window.startScheduler(window.__audio, window.__store);
+          window.startAmbience(window.__audio, currentMood, window.__store);
           masterGain.gain.linearRampToValueAtTime(userVol, t0 + 1.2);
           setPlayIcon(true);
           document.getElementById("dot").className = "dot live";
@@ -1876,29 +840,32 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         }
       });
 
-      // Skip
+      // Skip — roll a new progression for the current mood
       document.getElementById("skipBtn").addEventListener("click", () => {
-        if (isPlaying) newProgression(true);
+        if (isPlaying) window.newProgression(window.__audio, currentMood, true);
       });
 
       // BPM slider — live tempo control
       document.getElementById("bpmSlider").addEventListener("input", (e) => {
-        currentBPM = parseInt(e.target.value);
-        document.getElementById("bpmVal").textContent = currentBPM;
-        document.getElementById("trackSub").textContent =
-          `${NOTES[currentKey]} · ${currentBPM} bpm`;
+        window.setCurrentBPM(parseInt(e.target.value));
       });
 
       // Key chip — cycle through chromatic keys
       document.getElementById("keyChip").addEventListener("click", () => {
-        currentKey = (currentKey + 1) % 12;
-        const keyName = NOTES[currentKey];
-        document.getElementById("keyVal").textContent = keyName;
-        document.getElementById("trackSub").textContent =
-          `${keyName} · ${currentBPM} bpm`;
-        // Regenerate phrase for new key on next bar
-        currentPhrase = [];
-        phraseBarIdx = 0;
+        window.cycleCurrentKey();
+      });
+
+      // Tab restore: resume the AudioContext (Safari suspends it when hidden)
+      // and flush the scheduler so the 3-second buffer refills immediately.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible" || !isPlaying) return;
+        if (actx && actx.state === "suspended") {
+          actx.resume().then(() =>
+            window.flushScheduler(window.__audio, window.__store)
+          );
+        } else if (actx && window.__audio) {
+          window.flushScheduler(window.__audio, window.__store);
+        }
       });
 
       // Volume — smooth ramp, doesn't fight in-progress fades
@@ -1976,7 +943,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
 
       function applySettingToAudio(key, val) {
         if (key === "complexity") {
-          complexity = val;
+          window.__store.set({ complexity: val });
           return;
         }
         // Suppress vol slider during a mood-change crossfade so it doesn't
@@ -2023,21 +990,14 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         if (warpModGain) warpModGain.gain.value = val;
       });
 
-      // Complexity
-      let lastComplexity = 0.5;
+      // Complexity — writes through to the store so the module scheduler sees it.
       document
         .getElementById("complexitySlider")
         .addEventListener("input", (e) => {
-          complexity = parseFloat(e.target.value);
-          document.getElementById("val-complexity").textContent = Math.round(
-            complexity * 100,
-          );
-          saveCurrentSetting("complexity", complexity);
-          if (Math.abs(complexity - lastComplexity) > 0.2) {
-            currentPhrase = [];
-            phraseBarIdx = 0;
-            lastComplexity = complexity;
-          }
+          const val = parseFloat(e.target.value);
+          document.getElementById("val-complexity").textContent = Math.round(val * 100);
+          saveCurrentSetting("complexity", val);
+          window.__store.set({ complexity: val });
         });
 
       // Mood UI palettes — accent colour per mood
@@ -2059,12 +1019,10 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         document.querySelectorAll(".mood-btn").forEach((b) => {
           b.classList.toggle("active", b.dataset.mood === newMood);
         });
-        bgMood = newMood;
         applyMoodUI(newMood);
 
         if (!isPlaying) {
           currentMood = newMood;
-          // Restore sliders for this mood (audio context may not exist yet — that's fine)
           applyMoodSettings(newMood);
           return;
         }
@@ -2075,8 +1033,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         const now = actx.currentTime;
         const fadeOut = 0.7,
           fadeIn = 1.2;
-
-        // Fade master down (using current value, not new mood's vol yet)
         masterGain.gain.cancelScheduledValues(now);
         masterGain.gain.setValueAtTime(masterGain.gain.value, now);
         masterGain.gain.linearRampToValueAtTime(0.0001, now + fadeOut);
@@ -2084,11 +1040,9 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         setTimeout(
           () => {
             currentMood = newMood;
-            // Restore THIS mood's slider settings — updates sliders, displays, and audio
             applyMoodSettings(newMood);
-            newProgression(true);
-            startAmbience(newMood);
-            // Fade in to the new mood's saved volume
+            window.newProgression(window.__audio, newMood, true);
+            window.startAmbience(window.__audio, newMood, window.__store);
             const userVol = sliderToGain(
               parseFloat(document.getElementById("volSlider").value),
             );
