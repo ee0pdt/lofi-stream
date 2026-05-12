@@ -108,14 +108,15 @@ Create `deno.json` with:
 ```jsonc
 {
   "tasks": {
-    "check": "deno fmt --check && deno lint",
+    "check": "deno fmt --check && deno lint --permit-no-files",
     "test": "deno test -A",
     "fix": "deno fmt && deno lint --fix"
   },
   "fmt": {
     "indentWidth": 2,
     "singleQuote": false,
-    "lineWidth": 100
+    "lineWidth": 100,
+    "exclude": ["index.html", "CLAUDE.md", "docs/"]
   },
   "lint": {
     "rules": {
@@ -130,8 +131,10 @@ Create `deno.json` with:
 ```
 
 Notes:
-- `deno task check` currently runs only formatter + linter. The unicode scanner is wired in during Phase 1 (Task 16). `deno check` (TypeScript type-check) is wired in during Phase 2 once `src/` exists.
+- `deno task check` currently runs only formatter + linter. The unicode scanner is wired in during Phase 1 (Task 20). `deno check` (TypeScript type-check) is wired in during Phase 2 once `src/` exists.
 - `dev` and `build` tasks are added in Phase 2 alongside `src/`.
+- `--permit-no-files` lets `deno lint` succeed when no `.ts/.js` files exist yet (Phase 0 state).
+- `fmt.exclude` keeps `index.html` (Phase 1 fixes the unicode contamination manually, not via `deno fmt`, to preserve the existing CSS layout), the current `CLAUDE.md` (rewritten in Task 9), and `docs/` (the user has an external markdown linter) out of Deno's formatter. Once `src/` and `tests/` exist they're formatted automatically. The exclude list can be revisited in Phase 9.
 
 - [ ] **Step 2: Verify it parses**
 
