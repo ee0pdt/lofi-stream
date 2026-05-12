@@ -1299,7 +1299,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         // Reverb
         reverbNode = actx.createConvolver();
         reverbGain = actx.createGain();
-        reverbGain.gain.value = 0.3;
+        reverbGain.gain.value = DEFAULT_SETTINGS[currentMood].reverb;
         dryGain = actx.createGain();
         dryGain.gain.value = 0.68;
         analyser = actx.createAnalyser();
@@ -1466,7 +1466,9 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         return b;
       }
 
-      function loopedNoise(freq, type, Q, gainVal, panVal, dest) {
+      // Builds: BufferSource(white noise, looped) -> biquad -> gain -> StereoPanner -> dest.
+      // Returns the source so callers can decide whether to track it for teardown.
+      function makeLoopedNoise(freq, type, Q, gainVal, panVal, dest) {
         const src = actx.createBufferSource();
         src.buffer = noiseBuffer(4, true);
         src.loop = true;
@@ -1483,7 +1485,13 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         g.connect(p);
         p.connect(dest);
         src.start();
-        currentAmbienceSources.push(src);
+        return src;
+      }
+
+      function loopedNoise(freq, type, Q, gainVal, panVal, dest) {
+        currentAmbienceSources.push(
+          makeLoopedNoise(freq, type, Q, gainVal, panVal, dest),
+        );
       }
 
       function buildAmbienceForMood(mood) {
@@ -1595,19 +1603,29 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       // ── Safari-safe spatial ───────────────────────────────────────────────────────
+      // Distance cue: lowpass + attenuation as a function of SPATIAL[role].dist.
+      // Shared by makeSpatial and makeHaasSpatial so both keep an identical
+      // near/far filter curve.
+      function makeDistanceChain(s) {
+        const filt = actx.createBiquadFilter();
+        filt.type = "lowpass";
+        filt.frequency.value = 18000 - s.dist * 12000;
+        filt.Q.value = 0.5;
+        const g = actx.createGain();
+        g.gain.value = 1 - s.dist * 0.55;
+        filt.connect(g);
+        return { input: filt, output: g };
+      }
+
+      const clampPan = (v) => Math.max(-1, Math.min(1, v));
+
       function makeSpatial(role) {
         const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
+        const dist = makeDistanceChain(s);
         const pan = actx.createStereoPanner();
-        pan.pan.value = Math.max(-1, Math.min(1, s.pan));
-        const distGain = actx.createGain();
-        distGain.gain.value = 1 - s.dist * 0.55;
-        const distFilt = actx.createBiquadFilter();
-        distFilt.type = "lowpass";
-        distFilt.frequency.value = 18000 - s.dist * 12000;
-        distFilt.Q.value = 0.5;
-        distFilt.connect(distGain);
-        distGain.connect(pan);
-        return { input: distFilt, output: pan };
+        pan.pan.value = clampPan(s.pan);
+        dist.output.connect(pan);
+        return { input: dist.input, output: pan };
       }
 
       // Haas-style stereo widening: one side delayed ~12-18 ms (below echo
@@ -1615,31 +1633,26 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       // without any audible motion.
       function makeHaasSpatial(role, delayMs = 14) {
         const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
-        const distFilt = actx.createBiquadFilter();
-        distFilt.type = "lowpass";
-        distFilt.frequency.value = 18000 - s.dist * 12000;
-        distFilt.Q.value = 0.5;
-        const distGain = actx.createGain();
-        distGain.gain.value = 1 - s.dist * 0.55;
-        distFilt.connect(distGain);
+        const dist = makeDistanceChain(s);
 
         const width = 0.9;
         const leftPan = actx.createStereoPanner();
-        leftPan.pan.value = Math.max(-1, Math.min(1, s.pan - width));
+        leftPan.pan.value = clampPan(s.pan - width);
         const rightPan = actx.createStereoPanner();
-        rightPan.pan.value = Math.max(-1, Math.min(1, s.pan + width));
+        rightPan.pan.value = clampPan(s.pan + width);
 
+        // Equal-power half-gain on each side so L+R sums back to unity loudness.
         const leftGain = actx.createGain();
-        leftGain.gain.value = 0.7;
+        leftGain.gain.value = Math.SQRT1_2;
         const rightGain = actx.createGain();
-        rightGain.gain.value = 0.7;
+        rightGain.gain.value = Math.SQRT1_2;
 
         const delay = actx.createDelay(0.05);
         delay.delayTime.value = delayMs / 1000;
 
-        distGain.connect(leftGain);
+        dist.output.connect(leftGain);
         leftGain.connect(leftPan);
-        distGain.connect(delay);
+        dist.output.connect(delay);
         delay.connect(rightGain);
         rightGain.connect(rightPan);
 
@@ -1647,7 +1660,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         leftPan.connect(out);
         rightPan.connect(out);
 
-        return { input: distFilt, output: out };
+        return { input: dist.input, output: out };
       }
 
       // ── Vinyl scratch ─────────────────────────────────────────────────────────────
@@ -1699,31 +1712,17 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       // ── Tape hiss ─────────────────────────────────────────────────────────────────
-      // Uses BufferSource (not deprecated ScriptProcessor) for proper Safari behaviour
-      // Each layer has two independent noise sources panned hard L/R so the
-      // hiss bed is decorrelated rather than collapsed mono in the center.
+      // Each EQ layer has two independent noise sources panned hard L/R so the
+      // hiss bed is decorrelated rather than collapsing mono in the centre.
+      // Sources are NOT tracked in currentAmbienceSources — hiss persists across
+      // mood changes, whereas ambience gets stopped on mood transition.
       function startTapeHiss() {
         [
           { freq: 5500, Q: 0.6, gain: 0.09 },
           { freq: 1800, Q: 0.4, gain: 0.035 },
         ].forEach(({ freq, Q, gain }) => {
           [-0.9, 0.9].forEach((panValue) => {
-            const src = actx.createBufferSource();
-            src.buffer = noiseBuffer(4, true);
-            src.loop = true;
-            const hf = actx.createBiquadFilter();
-            hf.type = "bandpass";
-            hf.frequency.value = freq;
-            hf.Q.value = Q;
-            const hg = actx.createGain();
-            hg.gain.value = gain;
-            const p = actx.createStereoPanner();
-            p.pan.value = panValue;
-            src.connect(hf);
-            hf.connect(hg);
-            hg.connect(p);
-            p.connect(trackGains.hiss);
-            src.start();
+            makeLoopedNoise(freq, "bandpass", Q, gain, panValue, trackGains.hiss);
           });
         });
       }
