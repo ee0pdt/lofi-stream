@@ -1166,17 +1166,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         return a[randInt(0, a.length - 1)];
       }
 
-      const VOICINGS = {
-        min7: [0, 3, 7, 10],
-        maj7: [0, 4, 7, 11],
-        dom7: [0, 4, 7, 10],
-        min7b5: [0, 3, 6, 10],
-        maj6: [0, 4, 7, 9],
-        min9: [0, 3, 7, 10, 14],
-        dom9: [0, 4, 7, 10, 14],
-        maj9: [0, 4, 7, 11, 14],
-      };
-
       // ── Composed forms ────────────────────────────────────────────────────────────
       // Each mood is an explicit sequence of { bars, prog } sections.
       // bars = how many bars this section lasts (each bar = 4 chords cycling)
