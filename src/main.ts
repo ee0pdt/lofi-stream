@@ -26,13 +26,58 @@ export {
   SNARE_PAT,
 } from "./music/drum-patterns.ts";
 
+export { createStore } from "./store.ts";
+export type { Store } from "./store.ts";
+export { initialAppState } from "./state-init.ts";
+
+export {
+  applyMoodReverb,
+  applySettingToAudio,
+  applyWarp,
+  buildIR,
+  initAudio,
+  makeHaasSpatial,
+  makeSpatial,
+  noiseBuffer,
+  SPATIAL,
+  wireMixerCascade,
+  wireMoodCascade,
+} from "./audio/graph.ts";
+export type { SpatialConfig, SpatialPair } from "./audio/graph.ts";
+
+export { buildRainLayers, startAmbience, stopAmbience } from "./audio/ambience.ts";
+
+export {
+  beatDur,
+  flashRow,
+  midiToFreq,
+  playBass,
+  playCelesta,
+  playComp,
+  playGuitar,
+  playHat,
+  playKick,
+  playMelody,
+  playPad,
+  playRhodes,
+  playSnare,
+  playVibraphone,
+  playVinylScratch,
+  startScratches,
+  startTapeHiss,
+  swungTime,
+} from "./audio/instruments.ts";
+
 export type {
   Ambience,
+  AppState,
+  AudioRefs,
   Chord,
   Form,
   FormSection,
   Mood,
   MoodMeta,
+  MoodSettings,
   Settings,
   Timbre,
   VoicingName,

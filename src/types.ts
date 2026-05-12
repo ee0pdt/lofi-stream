@@ -142,4 +142,5 @@ export interface AudioRefs {
   readonly warpModGain: GainNode;
   readonly humGain: GainNode;
   readonly ambienceGain: GainNode;
+  readonly rainGain: GainNode;
 }

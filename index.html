@@ -698,52 +698,84 @@
     </div>
 
     <script type="module">
-      // Phase 4 bridge: import the modules built in Phases 2 and 3 and expose
-      // them on `window`, then signal readiness so the classic inline script
-      // (which is wrapped in a `lofi:ready` listener) can run.
+      // Phases 2-4 bridge: import the data + helpers, plus (commit C) the
+      // audio graph / instruments / ambience modules. Stash an AppState
+      // store on window so inline init can wire it up. Dispatch
+      // `lofi:ready` so the classic inline script (wrapped in a listener)
+      // can run.
       import {
-        VOICINGS,
-        FORMS,
-        MOOD_META,
-        DEFAULT_SETTINGS,
-        GHOST_PAT,
-        HAT_PAT,
-        KICK_PAT_NORMAL,
-        KICK_PAT_SOFT,
-        OPEN_PAT,
-        SNARE_PAT,
+        applyMoodReverb,
+        applySettingToAudio,
+        applyWarp,
         bassOct,
-        melodyOct,
-        walkingBassNotes,
-        nextFormPosition,
+        buildRainLayers,
+        createStore,
         currentSectionProg as currentSectionProgPure,
         DEFAULT_PROG,
+        DEFAULT_SETTINGS,
+        FORMS,
         generatePhrase,
+        GHOST_PAT,
+        HAT_PAT,
+        initAudio as initAudioPure,
+        initialAppState,
+        KICK_PAT_NORMAL,
+        KICK_PAT_SOFT,
+        melodyOct,
+        MOOD_META,
+        nextFormPosition,
+        OPEN_PAT,
+        playBass,
+        playComp,
+        playHat,
+        playKick,
+        playMelody,
+        playSnare,
+        SNARE_PAT,
+        startAmbience,
+        startScratches,
+        startTapeHiss,
+        stopAmbience,
+        VOICINGS,
+        walkingBassNotes,
       } from "./dist/main.js";
 
       Object.assign(window, {
-        VOICINGS,
-        FORMS,
-        MOOD_META,
+        applyMoodReverb,
+        applySettingToAudioPure: applySettingToAudio,
+        applyWarpPure: applyWarp,
+        bassOct,
+        buildRainLayers,
+        currentSectionProgPure,
+        DEFAULT_PROG,
         DEFAULT_SETTINGS,
+        FORMS,
+        generatePhrase,
         GHOST_PAT,
         HAT_PAT,
+        initAudioPure,
         KICK_PAT_NORMAL,
         KICK_PAT_SOFT,
-        OPEN_PAT,
-        SNARE_PAT,
-        bassOct,
         melodyOct,
-        walkingBassNotes,
+        MOOD_META,
         nextFormPosition,
-        DEFAULT_PROG,
-        generatePhrase,
-        // The pure module version of currentSectionProg takes (form, position).
-        // The inline version is no-arg. We expose the pure one under a distinct
-        // name so the inline `currentSectionProg` can wrap it without recursion.
-        currentSectionProgPure,
+        OPEN_PAT,
+        playBassPure: playBass,
+        playCompPure: playComp,
+        playHatPure: playHat,
+        playKickPure: playKick,
+        playMelodyPure: playMelody,
+        playSnarePure: playSnare,
+        SNARE_PAT,
+        startAmbience,
+        startScratches,
+        startTapeHiss,
+        stopAmbience,
+        VOICINGS,
+        walkingBassNotes,
       });
 
+      window.__store = createStore(initialAppState());
       window.dispatchEvent(new Event("lofi:ready"));
     </script>
     <script>
@@ -1179,9 +1211,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         "A#",
         "B",
       ];
-      function midiToFreq(m) {
-        return 440 * Math.pow(2, (m - 69) / 12);
-      }
       function rand(a, b) {
         return a + Math.random() * (b - a);
       }
@@ -1237,11 +1266,13 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
 
-      let actx, masterGain, analyser;
-      let reverbNode, reverbGain, dryGain;
-      let trackGains = {};
-      let rainGainNode = null;
-      let ambienceGain = null;
+      // Inline audio refs: thin mirrors of fields on window.__audio (the
+      // AudioRefs bag returned by the module initAudio). Kept for the
+      // slider handlers and scheduler that still live in inline scope.
+      // Commit E moves these readers into modules; this commit just
+      // shadows the bag.
+      let actx, masterGain, analyser, trackGains = {};
+      let rainGainNode = null, reverbGain = null, warpModGain = null;
       let complexity = 0.5;
       let isPlaying = false,
         schedulerTimer = null;
@@ -1252,825 +1283,77 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       let swingAmount = 0.08,
         nextBarTime = 0;
 
-      const SPATIAL = {
-        kick: { pan: 0.0, dist: 0.0 },
-        snare: { pan: 0.15, dist: 0.1 },
-        hat: { pan: 0.75, dist: 0.3 },
-        bass: { pan: -0.5, dist: 0.2 },
-        rhodesComp: { pan: 0.55, dist: 0.4 },
-        rhodesMel: { pan: -0.5, dist: 0.6 },
-        hiss: { pan: 0.0, dist: 0.8 },
-      };
-
-      let warpModGain = null; // gain node carrying the warp/wow/flutter LFO signal in cents
-      let humGainNode = null; // hum bus gain (controlled by mixer)
-
+      // ── Audio init + ambience: thin delegates to src/audio/ modules ──────────────
       function initAudio() {
-        actx = new (window.AudioContext || window.webkitAudioContext)();
-        masterGain = actx.createGain();
-        masterGain.gain.value = 0.65;
-
-        [
-          "drums",
-          "bass",
-          "comp",
-          "melody",
-          "hiss",
-          "scratches",
-          "ambience",
-          "hum",
-        ].forEach((t) => {
-          trackGains[t] = actx.createGain();
-          trackGains[t].gain.value = {
-            drums: 0.9,
-            bass: 0.85,
-            comp: 0.8,
-            melody: 0.75,
-            hiss: 0.5,
-            scratches: 0.7,
-            ambience: 0.6,
-            hum: 0.4,
-          }[t];
-          trackGains[t].connect(masterGain);
-        });
-
-        // Tape compression + warmth
-        const comp = actx.createDynamicsCompressor();
-        comp.threshold.value = -16;
-        comp.knee.value = 10;
-        comp.ratio.value = 4;
-        comp.attack.value = 0.003;
-        comp.release.value = 0.25;
-        const tapeF = actx.createBiquadFilter();
-        tapeF.type = "lowshelf";
-        tapeF.frequency.value = 200;
-        tapeF.gain.value = 3;
-        const airF = actx.createBiquadFilter();
-        airF.type = "highshelf";
-        airF.frequency.value = 6000;
-        airF.gain.value = -9;
-
-        // Reverb
-        reverbNode = actx.createConvolver();
-        reverbGain = actx.createGain();
-        reverbGain.gain.value = DEFAULT_SETTINGS[currentMood].reverb;
-        dryGain = actx.createGain();
-        dryGain.gain.value = 0.68;
-        analyser = actx.createAnalyser();
-        analyser.fftSize = 512;
-
-        masterGain.connect(comp);
-        comp.connect(tapeF);
-        tapeF.connect(airF);
-        airF.connect(dryGain);
-        dryGain.connect(analyser);
-        airF.connect(reverbGain);
-        reverbGain.connect(reverbNode);
-        reverbNode.connect(analyser);
-        analyser.connect(actx.destination);
-
-        // Rain
-        rainGainNode = actx.createGain();
-        rainGainNode.gain.value = 0.16;
-        rainGainNode.connect(masterGain);
-        buildRainLayers();
-
-        // Ambience bus
-        ambienceGain = actx.createGain();
-        ambienceGain.gain.value = 0;
-        ambienceGain.connect(trackGains.ambience);
-
-        // ── Warp/wow/flutter modulator ────────────────────────────────────────────
-        // Two LFOs summed: slow ~0.3Hz wow + faster ~6Hz flutter
-        // Output signal is in "cents" units, to be connected to oscillator.detune
-        warpModGain = actx.createGain();
-        warpModGain.gain.value = 0; // disabled until applied by mood settings
-        // The output is summed into the modulator's gain so the final value
-        // is (rawOscOutput * warpModGain) cents
-        // We'll just connect this gain node's output to detune AudioParams
-
-        // Wow LFO (slow, deep pitch wobble — ~25 cents at full strength)
-        const wow = actx.createOscillator();
-        wow.type = "sine";
-        wow.frequency.value = 0.35;
-        const wowDepth = actx.createGain();
-        wowDepth.gain.value = 25;
-        wow.connect(wowDepth);
-        wowDepth.connect(warpModGain);
-        wow.start();
-
-        // Flutter LFO (faster, smaller — ~6Hz, ~8 cents)
-        const flut = actx.createOscillator();
-        flut.type = "sine";
-        flut.frequency.value = 6.2;
-        const flutDepth = actx.createGain();
-        flutDepth.gain.value = 8;
-        flut.connect(flutDepth);
-        flutDepth.connect(warpModGain);
-        flut.start();
-
-        // Slow drift in flutter rate (motor irregularity) — modulate the flutter LFO freq
-        const flutDrift = actx.createOscillator();
-        flutDrift.type = "sine";
-        flutDrift.frequency.value = 0.08;
-        const flutDriftDepth = actx.createGain();
-        flutDriftDepth.gain.value = 1.5;
-        flutDrift.connect(flutDriftDepth);
-        flutDriftDepth.connect(flut.frequency);
-        flutDrift.start();
-
-        // ── Hum (mains 50Hz + harmonics) ──────────────────────────────────────────
-        humGainNode = actx.createGain();
-        humGainNode.gain.value = 0.5;
-        humGainNode.connect(trackGains.hum);
-
-        // 50Hz fundamental + 100Hz + 150Hz harmonics (less intense as they go up)
-        [
-          [50, 0.08],
-          [100, 0.04],
-          [150, 0.02],
-          [200, 0.01],
-        ].forEach(([freq, gain]) => {
-          const o = actx.createOscillator();
-          o.type = "sine";
-          o.frequency.value = freq;
-          const g = actx.createGain();
-          g.gain.value = gain;
-          o.connect(g);
-          g.connect(humGainNode);
-          o.start();
-        });
-
-        // Subtle hum amplitude modulation — adds life so it's not a pure tone
-        const humLFO = actx.createOscillator();
-        humLFO.type = "sine";
-        humLFO.frequency.value = 0.7;
-        const humLFOdepth = actx.createGain();
-        humLFOdepth.gain.value = 0.04;
-        humLFO.connect(humLFOdepth);
-        humLFOdepth.connect(humGainNode.gain);
-        humLFO.start();
-
-        startTapeHiss();
-        startScratches();
-
+        const audio = window.initAudioPure(window.__store);
+        window.__audio = audio;
+        actx = audio.actx;
+        masterGain = audio.masterGain;
+        analyser = audio.analyser;
+        trackGains = audio.trackGains;
+        rainGainNode = audio.rainGain;
+        reverbGain = audio.wetGain;
+        warpModGain = audio.warpModGain;
+        window.buildRainLayers(audio);
+        window.startAmbience(audio, currentMood, window.__store);
+        window.startTapeHiss(audio);
+        window.startScratches(audio, window.__store);
         applyMoodSettings(currentMood);
       }
 
-      // Helper: wire an oscillator's detune param to the global warp modulator
-      function applyWarp(osc) {
-        if (warpModGain && osc.detune) warpModGain.connect(osc.detune);
-      }
-
-      function buildIR(dur, decay) {
-        const sr = actx.sampleRate,
-          len = sr * dur;
-        const buf = actx.createBuffer(2, len, sr);
-        const pre = Math.floor(sr * 0.014);
-        for (let c = 0; c < 2; c++) {
-          const d = buf.getChannelData(c);
-          for (let i = 0; i < len; i++) {
-            if (i < pre) {
-              d[i] = 0;
-              continue;
-            }
-            const t = (i - pre) / (len - pre);
-            d[i] =
-              (Math.random() * 2 - 1) * Math.pow(1 - t, decay * 2.4 + c * 0.06);
-          }
-        }
-        return buf;
-      }
-
       function applyMoodReverb() {
-        const m = MOOD_META[currentMood];
-        reverbNode.buffer = buildIR(m.reverb.dur, m.reverb.decay);
-        swingAmount = rand(...m.swingRange);
+        window.applyMoodReverb(window.__audio, currentMood);
+        const r = window.MOOD_META[currentMood].swingRange;
+        swingAmount = r[0] + Math.random() * (r[1] - r[0]);
       }
-
-      // ── Per-mood ambience ─────────────────────────────────────────────────────────
-      let currentAmbienceSources = [];
 
       function stopAmbience() {
-        currentAmbienceSources.forEach((s) => {
-          try {
-            s.stop();
-          } catch (e) {}
-        });
-        currentAmbienceSources = [];
+        window.stopAmbience();
       }
 
       function startAmbience(mood) {
-        stopAmbience();
-        ambienceGain.gain.setTargetAtTime(0.0001, actx.currentTime, 0.5);
-        setTimeout(() => {
-          buildAmbienceForMood(mood);
-          ambienceGain.gain.setTargetAtTime(1, actx.currentTime, 1.0);
-        }, 600);
+        window.startAmbience(window.__audio, mood, window.__store);
       }
 
-      function noiseBuffer(secs, stereo = false) {
-        const len = actx.sampleRate * secs;
-        const ch = stereo ? 2 : 1;
-        const b = actx.createBuffer(ch, len, actx.sampleRate);
-        for (let c = 0; c < ch; c++) {
-          const d = b.getChannelData(c);
-          for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-        }
-        return b;
-      }
-
-      // Builds: BufferSource(white noise, looped) -> biquad -> gain -> StereoPanner -> dest.
-      // Returns the source so callers can decide whether to track it for teardown.
-      function makeLoopedNoise(freq, type, Q, gainVal, panVal, dest) {
-        const src = actx.createBufferSource();
-        src.buffer = noiseBuffer(4, true);
-        src.loop = true;
-        const filt = actx.createBiquadFilter();
-        filt.type = type;
-        filt.frequency.value = freq;
-        filt.Q.value = Q;
-        const g = actx.createGain();
-        g.gain.value = gainVal;
-        const p = actx.createStereoPanner();
-        p.pan.value = panVal;
-        src.connect(filt);
-        filt.connect(g);
-        g.connect(p);
-        p.connect(dest);
-        src.start();
-        return src;
-      }
-
-      function loopedNoise(freq, type, Q, gainVal, panVal, dest) {
-        currentAmbienceSources.push(
-          makeLoopedNoise(freq, type, Q, gainVal, panVal, dest),
-        );
-      }
-
-      function buildAmbienceForMood(mood) {
-        const dest = ambienceGain;
-        if (mood === "rainy") {
-          // Rain in the rainy mood routes through rainGainNode so the rain slider
-          // is a true master control. Boost initial gains since rainGainNode applies
-          // its own attenuation.
-          loopedNoise(300, "lowpass", 1.0, 0.35, -0.3, rainGainNode);
-          loopedNoise(1600, "bandpass", 0.5, 0.18, 0.0, rainGainNode);
-          loopedNoise(6000, "highpass", 0.8, 0.06, 0.3, rainGainNode);
-        } else if (mood === "late") {
-          // Very low distant traffic rumble + sparse high hiss
-          loopedNoise(80, "lowpass", 1.5, 0.22, 0.0, dest);
-          loopedNoise(400, "bandpass", 0.3, 0.06, -0.2, dest);
-          loopedNoise(8000, "highpass", 1.0, 0.03, 0.4, dest);
-          scheduleSiren();
-        } else if (mood === "cafe") {
-          loopedNoise(500, "bandpass", 0.4, 0.12, 0.0, dest);
-          loopedNoise(2000, "bandpass", 0.6, 0.07, 0.2, dest);
-          loopedNoise(200, "lowpass", 0.8, 0.18, -0.2, dest);
-          scheduleClink();
-        } else if (mood === "sleepy") {
-          loopedNoise(120, "lowpass", 1.2, 0.28, 0.0, dest);
-          loopedNoise(3000, "highpass", 0.5, 0.02, 0.0, dest);
-        }
-      }
-
-      function scheduleSiren() {
-        if (currentMood !== "late" || !isPlaying) return;
-        const delay = rand(18000, 45000);
-        setTimeout(() => {
-          if (currentMood !== "late" || !isPlaying) return;
-          const now = actx.currentTime;
-          const baseFreq = pick([440, 550, 660]);
-          const dur = rand(1.5, 3.0);
-          const o = actx.createOscillator();
-          const g = actx.createGain();
-          const p = actx.createStereoPanner();
-          p.pan.value = rand(-0.6, 0.6);
-          o.type = "sine";
-          o.frequency.setValueAtTime(baseFreq, now);
-          o.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur * 0.3);
-          o.frequency.linearRampToValueAtTime(baseFreq, now + dur * 0.6);
-          o.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur);
-          g.gain.setValueAtTime(0, now);
-          g.gain.linearRampToValueAtTime(0.03, now + 0.3);
-          g.gain.setValueAtTime(0.03, now + dur - 0.3);
-          g.gain.linearRampToValueAtTime(0, now + dur);
-          o.connect(g);
-          g.connect(p);
-          p.connect(ambienceGain);
-          o.start(now);
-          o.stop(now + dur);
-          scheduleSiren();
-        }, delay);
-      }
-
-      function scheduleClink() {
-        if (currentMood !== "cafe" || !isPlaying) return;
-        const delay = rand(8000, 22000);
-        setTimeout(() => {
-          if (currentMood !== "cafe" || !isPlaying) return;
-          const now = actx.currentTime;
-          // Metallic clink = short sine burst at high freq with fast decay
-          [1, 1.52, 2.1].forEach((ratio, idx) => {
-            const freq = rand(2400, 3600) * ratio;
-            const o = actx.createOscillator();
-            const g = actx.createGain();
-            o.type = "sine";
-            o.frequency.value = freq;
-            const t = now + idx * 0.002;
-            g.gain.setValueAtTime(0, t);
-            g.gain.linearRampToValueAtTime(0.04, t + 0.001);
-            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-            o.connect(g);
-            g.connect(ambienceGain);
-            o.start(t);
-            o.stop(t + 0.2);
-          });
-          scheduleClink();
-        }, delay);
-      }
-
-      function buildRainLayers() {
-        const layers = [
-          { type: "lowpass", freq: 320, Q: 1.2, gain: 0.28, pan: -0.3 },
-          { type: "bandpass", freq: 1800, Q: 0.5, gain: 0.14, pan: 0.0 },
-          { type: "highpass", freq: 6000, Q: 0.8, gain: 0.06, pan: 0.25 },
-        ];
-        layers.forEach(({ type, freq, Q, gain, pan }) => {
-          const src = actx.createBufferSource();
-          src.buffer = noiseBuffer(4, true);
-          src.loop = true;
-          const filt = actx.createBiquadFilter();
-          filt.type = type;
-          filt.frequency.value = freq;
-          filt.Q.value = Q;
-          const g = actx.createGain();
-          g.gain.value = gain;
-          const p = actx.createStereoPanner();
-          p.pan.value = pan;
-          src.connect(filt);
-          filt.connect(g);
-          g.connect(p);
-          p.connect(rainGainNode);
-          src.start();
-        });
-      }
-
-      // ── Safari-safe spatial ───────────────────────────────────────────────────────
-      // Distance cue: lowpass + attenuation as a function of SPATIAL[role].dist.
-      // Shared by makeSpatial and makeHaasSpatial so both keep an identical
-      // near/far filter curve.
-      function makeDistanceChain(s) {
-        const filt = actx.createBiquadFilter();
-        filt.type = "lowpass";
-        filt.frequency.value = 18000 - s.dist * 12000;
-        filt.Q.value = 0.5;
-        const g = actx.createGain();
-        g.gain.value = 1 - s.dist * 0.55;
-        filt.connect(g);
-        return { input: filt, output: g };
-      }
-
-      const clampPan = (v) => Math.max(-1, Math.min(1, v));
-
-      function makeSpatial(role) {
-        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
-        const dist = makeDistanceChain(s);
-        const pan = actx.createStereoPanner();
-        pan.pan.value = clampPan(s.pan);
-        dist.output.connect(pan);
-        return { input: dist.input, output: pan };
-      }
-
-      // Haas-style stereo widening: one side delayed ~12-18 ms (below echo
-      // perception threshold) so the listener perceives the source as wider
-      // without any audible motion.
-      function makeHaasSpatial(role, delayMs = 14) {
-        const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
-        const dist = makeDistanceChain(s);
-
-        const width = 0.9;
-        const leftPan = actx.createStereoPanner();
-        leftPan.pan.value = clampPan(s.pan - width);
-        const rightPan = actx.createStereoPanner();
-        rightPan.pan.value = clampPan(s.pan + width);
-
-        // Equal-power half-gain on each side so L+R sums back to unity loudness.
-        const leftGain = actx.createGain();
-        leftGain.gain.value = Math.SQRT1_2;
-        const rightGain = actx.createGain();
-        rightGain.gain.value = Math.SQRT1_2;
-
-        const delay = actx.createDelay(0.05);
-        delay.delayTime.value = delayMs / 1000;
-
-        dist.output.connect(leftGain);
-        leftGain.connect(leftPan);
-        dist.output.connect(delay);
-        delay.connect(rightGain);
-        rightGain.connect(rightPan);
-
-        const out = actx.createGain();
-        leftPan.connect(out);
-        rightPan.connect(out);
-
-        return { input: dist.input, output: out };
-      }
-
-      // ── Vinyl scratch ─────────────────────────────────────────────────────────────
-      function playVinylScratch() {
-        if (!actx || !isPlaying) return;
-        const now = actx.currentTime;
-        const numGrains = Math.floor(rand(2, 5));
-        for (let g = 0; g < numGrains; g++) {
-          const offset = g * rand(0.04, 0.09);
-          const grainDur = rand(0.04, 0.1);
-          const src = actx.createBufferSource();
-          src.buffer = noiseBuffer(0.15);
-          src.playbackRate.setValueAtTime(rand(0.6, 1.8), now + offset);
-          src.playbackRate.linearRampToValueAtTime(
-            rand(0.4, 2.2),
-            now + offset + grainDur,
-          );
-          const filt = actx.createBiquadFilter();
-          filt.type = "bandpass";
-          filt.frequency.setValueAtTime(rand(800, 3000), now + offset);
-          filt.frequency.exponentialRampToValueAtTime(
-            rand(400, 6000),
-            now + offset + grainDur,
-          );
-          filt.Q.value = rand(1.5, 4);
-          const gainNode = actx.createGain();
-          gainNode.gain.setValueAtTime(0, now + offset);
-          gainNode.gain.linearRampToValueAtTime(
-            rand(0.06, 0.14),
-            now + offset + 0.005,
-          );
-          gainNode.gain.exponentialRampToValueAtTime(
-            0.0001,
-            now + offset + grainDur,
-          );
-          const p = actx.createStereoPanner();
-          p.pan.value = rand(-0.4, 0.4);
-          src.connect(filt);
-          filt.connect(gainNode);
-          gainNode.connect(p);
-          p.connect(trackGains.scratches);
-          src.start(now + offset);
-          src.stop(now + offset + grainDur + 0.02);
-        }
-        setTimeout(playVinylScratch, rand(8000, 24000));
-      }
-      function startScratches() {
-        setTimeout(playVinylScratch, rand(4000, 10000));
-      }
-
-      // ── Tape hiss ─────────────────────────────────────────────────────────────────
-      // Each EQ layer has two independent noise sources panned hard L/R so the
-      // hiss bed is decorrelated rather than collapsing mono in the centre.
-      // Sources are NOT tracked in currentAmbienceSources — hiss persists across
-      // mood changes, whereas ambience gets stopped on mood transition.
-      function startTapeHiss() {
-        [
-          { freq: 5500, Q: 0.6, gain: 0.09 },
-          { freq: 1800, Q: 0.4, gain: 0.035 },
-        ].forEach(({ freq, Q, gain }) => {
-          [-0.9, 0.9].forEach((panValue) => {
-            makeLoopedNoise(freq, "bandpass", Q, gain, panValue, trackGains.hiss);
-          });
-        });
-      }
-
-      // ── Instruments — timbre varies by mood ──────────────────────────────────────
-
-      // Rhodes: warm triangle+sine electric piano
-      function playRhodes(midi, time, dur, vel = 0.16, role = "rhodesComp") {
-        const trackKey = role === "rhodesMel" ? "melody" : "comp";
-        const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-        [
-          [midiToFreq(midi), "sine"],
-          [midiToFreq(midi) * 1.004, "sine"],
-          [midiToFreq(midi) * 0.997, "triangle"],
-        ].forEach(([f, type], i) => {
-          if (i === 0) flashRow(rowId, time, 120);
-          const o = actx.createOscillator(),
-            g = actx.createGain(),
-            filt = actx.createBiquadFilter();
-          o.type = type;
-          o.frequency.value = f;
-          applyWarp(o);
-          const v = vel * (i === 2 ? 0.3 : 1);
-          g.gain.setValueAtTime(0, time);
-          g.gain.linearRampToValueAtTime(v, time + 0.008);
-          g.gain.exponentialRampToValueAtTime(v * 0.55, time + 0.06);
-          g.gain.setValueAtTime(v * 0.55, time + dur * 0.5);
-          g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.95);
-          filt.type = "lowpass";
-          filt.frequency.setValueAtTime(1800, time);
-          filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
-          filt.Q.value = 0.8;
-          const sp = makeHaasSpatial(role);
-          o.connect(filt);
-          filt.connect(g);
-          g.connect(sp.input);
-          sp.output.connect(trackGains[trackKey]);
-          o.start(time);
-          o.stop(time + dur + 0.05);
-        });
-      }
-
-      // Vibraphone: hollow sine, fast attack, longer natural decay, airy filter
-      function playVibraphone(
-        midi,
-        time,
-        dur,
-        vel = 0.14,
-        role = "rhodesComp",
-      ) {
-        const trackKey = role === "rhodesMel" ? "melody" : "comp";
-        const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-        const f = midiToFreq(midi);
-        [
-          [f, 0.9],
-          [f * 2, 0.12],
-        ].forEach(([freq, relVel], idx) => {
-          if (idx === 0) flashRow(rowId, time, 120);
-          const o = actx.createOscillator(),
-            g = actx.createGain();
-          o.type = "sine";
-          o.frequency.value = freq;
-          applyWarp(o);
-          const v = vel * relVel;
-          g.gain.setValueAtTime(0, time);
-          g.gain.linearRampToValueAtTime(v, time + 0.005); // very fast attack
-          g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
-          g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4); // rings out
-          const sp = makeHaasSpatial(role);
-          o.connect(g);
-          g.connect(sp.input);
-          sp.output.connect(trackGains[trackKey]);
-          o.start(time);
-          o.stop(time + dur * 1.5);
-        });
-      }
-
-      // Nylon guitar pluck: fast attack, exponential decay, bright then dark
-      function playGuitar(midi, time, dur, vel = 0.18, role = "rhodesComp") {
-        const trackKey = role === "rhodesMel" ? "melody" : "comp";
-        const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-        const f = midiToFreq(midi);
-        [
-          [f, 1],
-          [f * 2, 0.4],
-          [f * 3, 0.18],
-          [f * 4, 0.08],
-        ].forEach(([freq, relVel], idx) => {
-          if (idx === 0) flashRow(rowId, time, 80);
-          const o = actx.createOscillator(),
-            g = actx.createGain(),
-            filt = actx.createBiquadFilter();
-          o.type = idx < 2 ? "sawtooth" : "sine";
-          o.frequency.value = freq;
-          applyWarp(o);
-          const v = vel * relVel;
-          g.gain.setValueAtTime(0, time);
-          g.gain.linearRampToValueAtTime(v, time + 0.003); // very fast pluck attack
-          g.gain.exponentialRampToValueAtTime(v * 0.08, time + 0.09);
-          g.gain.exponentialRampToValueAtTime(
-            0.0001,
-            time + Math.min(dur, 0.6),
-          );
-          filt.type = "lowpass";
-          filt.frequency.setValueAtTime(5000, time);
-          filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
-          filt.Q.value = 0.5;
-          const sp = makeHaasSpatial(role);
-          o.connect(filt);
-          filt.connect(g);
-          g.connect(sp.input);
-          sp.output.connect(trackGains[trackKey]);
-          o.start(time);
-          o.stop(time + Math.min(dur, 0.65));
-        });
-      }
-
-      // Pad: soft slow-attack sine wash — no attack transient, just swells
-      function playPad(midi, time, dur, vel = 0.1, role = "rhodesComp") {
-        const trackKey = role === "rhodesMel" ? "melody" : "comp";
-        const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-        const f = midiToFreq(midi);
-        [
-          [f, 1],
-          [f * 1.002, 0.7],
-          [f * 0.998, 0.7],
-        ].forEach(([freq], idx) => {
-          if (idx === 0) flashRow(rowId, time, 300); // pad sustains long
-          const o = actx.createOscillator(),
-            g = actx.createGain(),
-            filt = actx.createBiquadFilter();
-          o.type = "sine";
-          o.frequency.value = freq;
-          applyWarp(o);
-          g.gain.setValueAtTime(0, time);
-          g.gain.linearRampToValueAtTime(vel, time + beatDur() * 0.8); // very slow swell
-          g.gain.setValueAtTime(vel, time + dur * 0.6);
-          g.gain.linearRampToValueAtTime(0, time + dur + beatDur() * 0.5);
-          filt.type = "lowpass";
-          filt.frequency.value = 900;
-          filt.Q.value = 0.4;
-          const sp = makeHaasSpatial(role);
-          o.connect(filt);
-          filt.connect(g);
-          g.connect(sp.input);
-          sp.output.connect(trackGains[trackKey]);
-          o.start(time);
-          o.stop(time + dur + beatDur() * 0.6);
-        });
-      }
-
-      // Celesta: high, very quiet, pure sine with fast decay — music-box feel
-      function playCelesta(midi, time, dur, vel = 0.1, role = "rhodesComp") {
-        const trackKey = role === "rhodesMel" ? "melody" : "comp";
-        const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-        flashRow(rowId, time, 90);
-        const f = midiToFreq(midi + 12); // up an octave
-        const o = actx.createOscillator(),
-          g = actx.createGain();
-        o.type = "sine";
-        o.frequency.value = f;
-        applyWarp(o);
-        g.gain.setValueAtTime(0, time);
-        g.gain.linearRampToValueAtTime(vel * 0.6, time + 0.004);
-        g.gain.exponentialRampToValueAtTime(vel * 0.08, time + 0.2);
-        g.gain.exponentialRampToValueAtTime(
-          0.0001,
-          time + Math.min(dur * 0.9, 1.2),
-        );
-        const reverb2 = actx.createConvolver();
-        reverb2.buffer = buildIR(1.5, 0.6);
-        const rv = actx.createGain();
-        rv.gain.value = 0.5;
-        const sp = makeHaasSpatial(role);
-        o.connect(g);
-        g.connect(sp.input);
-        sp.output.connect(trackGains[trackKey]);
-        g.connect(rv);
-        rv.connect(reverb2);
-        reverb2.connect(trackGains[trackKey]);
-        o.start(time);
-        o.stop(time + Math.min(dur, 1.3));
-      }
-
-      // Dispatcher — pick voice based on current mood timbre
+      // Inline thin wrappers — scheduler still calls these by name; they
+      // delegate to the module versions and pass the current mood/bpm.
       function playComp(midi, time, dur, vel, role) {
-        const t = MOOD_META[currentMood].compTimbre;
-        if (t === "vibraphone") playVibraphone(midi, time, dur, vel, role);
-        else if (t === "guitar") playGuitar(midi, time, dur, vel, role);
-        else if (t === "pad") playPad(midi, time, dur, vel, role);
-        else playRhodes(midi, time, dur, vel, role);
+        window.playCompPure(
+          window.__audio,
+          midi,
+          time,
+          dur,
+          vel,
+          role,
+          currentMood,
+          currentBPM,
+        );
       }
       function playMelody(midi, time, dur, vel, role) {
-        const t = MOOD_META[currentMood].melTimbre;
-        if (t === "vibraphone") playVibraphone(midi, time, dur, vel, role);
-        else if (t === "celesta") playCelesta(midi, time, dur, vel, role);
-        else playRhodes(midi, time, dur, vel, role);
-      }
-
-      // Bass — timbre varies slightly by mood
-      function playBass(midi, time, dur, vel = 0.28) {
-        if (vel >= 0.28) flashRow("mx-bass", time, 100);
-        const m = MOOD_META[currentMood];
-        const o = actx.createOscillator(),
-          o2 = actx.createOscillator(),
-          g = actx.createGain(),
-          filt = actx.createBiquadFilter();
-        o.type = "triangle";
-        o2.type = "sine";
-        o.frequency.value = midiToFreq(midi);
-        o2.frequency.value = midiToFreq(midi - 12);
-        applyWarp(o);
-        applyWarp(o2);
-        filt.type = "lowpass";
-        filt.frequency.value = m.bassFilter;
-        filt.Q.value = 1.1;
-        g.gain.setValueAtTime(0, time);
-        g.gain.linearRampToValueAtTime(vel, time + m.bassAttack);
-        g.gain.setValueAtTime(vel * 0.75, time + 0.1);
-        g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.88);
-        const sp = makeSpatial("bass");
-        o.connect(filt);
-        o2.connect(filt);
-        filt.connect(g);
-        g.connect(sp.input);
-        sp.output.connect(trackGains.bass);
-        o.start(time);
-        o2.start(time);
-        o.stop(time + dur + 0.05);
-        o2.stop(time + dur + 0.05);
-      }
-
-      // Kick — consistent but slightly softer for sleepy
-      // ── Mixer row flash ───────────────────────────────────────────────────────────
-      // Schedules a visual flash on a mixer row to fire at approximately the
-      // right wall-clock moment when the audio event plays.
-      // duration = how long the flash stays lit (ms)
-      const FLASH_DUR = 80;
-      function flashRow(rowId, scheduledAudioTime, duration = FLASH_DUR) {
-        const delayMs = (scheduledAudioTime - actx.currentTime) * 1000;
-        if (delayMs < -50) return;
-        setTimeout(
-          () => {
-            const row = document.getElementById(rowId);
-            if (!row) return;
-            const input = row.querySelector("input[type=range]");
-            if (!input) return;
-            input.classList.add("flash");
-            setTimeout(() => input.classList.remove("flash"), duration);
-          },
-          Math.max(0, delayMs),
+        window.playMelodyPure(
+          window.__audio,
+          midi,
+          time,
+          dur,
+          vel,
+          role,
+          currentMood,
         );
       }
+      function playBass(midi, time, dur, vel = 0.28) {
+        window.playBassPure(window.__audio, midi, time, dur, vel, currentMood);
+      }
 
+      // Drum thin wrappers — scheduler still calls these by name.
       function playKick(time) {
-        flashRow("mx-drums", time, 120);
-        const vel = currentMood === "sleepy" ? 0.38 : 0.55;
-        const o = actx.createOscillator(),
-          g = actx.createGain();
-        o.type = "sine";
-        o.frequency.setValueAtTime(180, time);
-        o.frequency.exponentialRampToValueAtTime(38, time + 0.18);
-        g.gain.setValueAtTime(vel, time);
-        g.gain.exponentialRampToValueAtTime(0.0001, time + 0.28);
-        const sp = makeSpatial("kick");
-        o.connect(g);
-        g.connect(sp.input);
-        sp.output.connect(trackGains.drums);
-        o.start(time);
-        o.stop(time + 0.3);
-        const b = noiseBuffer(0.008);
-        const src = actx.createBufferSource();
-        src.buffer = b;
-        const cg = actx.createGain();
-        cg.gain.value = 0.1;
-        src.connect(cg);
-        cg.connect(sp.input);
-        src.start(time);
+        window.playKickPure(window.__audio, time, currentMood);
       }
-
-      // Snare — mood-tuned frequency and volume
       function playSnare(time, ghost = false) {
-        if (!ghost) flashRow("mx-drums", time, 80);
-        const m = MOOD_META[currentMood];
-        const vol = ghost ? 0.04 : currentMood === "sleepy" ? 0.09 : 0.15;
-        const b = noiseBuffer(0.18);
-        const src = actx.createBufferSource();
-        src.buffer = b;
-        const filt = actx.createBiquadFilter();
-        filt.type = "bandpass";
-        filt.frequency.value = m.snareFreq;
-        filt.Q.value = m.snareQ;
-        const g = actx.createGain();
-        g.gain.setValueAtTime(vol, time);
-        g.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
-        const sp = makeSpatial("snare");
-        src.connect(filt);
-        filt.connect(g);
-        g.connect(sp.input);
-        sp.output.connect(trackGains.drums);
-        src.start(time);
+        window.playSnarePure(window.__audio, time, currentMood, ghost);
       }
-
-      // Hat — café gets lighter brushes, sleepy gets very quiet
       function playHat(time, open = false, vol = 0.06) {
-        // Hat flashes are very brief so they read as rhythm, not distraction
-        flashRow("mx-drums", time, 40);
-        const moodVol =
-          { rainy: 1, late: 0.9, cafe: 0.7, sleepy: 0.5 }[currentMood] ?? 1;
-        const len = open ? 0.22 : 0.04;
-        const b = noiseBuffer(len);
-        const src = actx.createBufferSource();
-        src.buffer = b;
-        const filt = actx.createBiquadFilter();
-        filt.type = "highpass";
-        filt.frequency.value = currentMood === "cafe" ? 11000 : 9000;
-        const g = actx.createGain();
-        g.gain.setValueAtTime(vol * moodVol, time);
-        g.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
-        const sp = makeSpatial("hat");
-        src.connect(filt);
-        filt.connect(g);
-        g.connect(sp.input);
-        sp.output.connect(trackGains.drums);
-        src.start(time);
+        window.playHatPure(window.__audio, time, currentMood, open, vol);
       }
-
-      // Drum patterns — café gets a lighter swing, sleepy drops the syncopated kick
-      const KICK_PAT_NORMAL = [1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0];
-      const KICK_PAT_SOFT = [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0]; // sleepy/late: simpler
-      const SNARE_PAT = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-      const GHOST_PAT = [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0];
-      const HAT_PAT = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0];
-      const OPEN_PAT = [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
       function beatDur() {
         return 60 / currentBPM;
@@ -2696,32 +1979,10 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           complexity = val;
           return;
         }
-        if (key === "vol") {
-          if (masterGain && !moodChangeInProgress) {
-            const target = sliderToGain(val);
-            const t = actx.currentTime;
-            masterGain.gain.cancelScheduledValues(t);
-            masterGain.gain.setValueAtTime(masterGain.gain.value, t);
-            masterGain.gain.linearRampToValueAtTime(target, t + 0.05);
-          }
-          return;
-        }
-        if (key === "rain") {
-          if (rainGainNode) rainGainNode.gain.value = sliderToGain(val);
-          return;
-        }
-        if (key === "reverb") {
-          // wet level is a unitless mix ratio, not perceptual loudness — use raw value
-          if (reverbGain) reverbGain.gain.value = val;
-          return;
-        }
-        if (key === "warp") {
-          // warpModGain is summed-cents output. Scale by slider (linear, not log).
-          if (warpModGain) warpModGain.gain.value = val;
-          return;
-        }
-        // Otherwise it's a track gain
-        if (trackGains[key]) trackGains[key].gain.value = sliderToGain(val);
+        // Suppress vol slider during a mood-change crossfade so it doesn't
+        // fight the master-gain envelope. Other keys are always safe.
+        if (key === "vol" && moodChangeInProgress) return;
+        if (window.__audio) window.applySettingToAudioPure(window.__audio, key, val);
       }
 
       // Per-track faders
