@@ -8,11 +8,12 @@ This file is read by Claude Code (and other AI assistants) when working on this 
 
 ## Running
 
-- `deno task dev` for local development (once Phase 2 of the migration lands; until then, open `index.html` directly).
+- `deno task dev` for local development, then open <http://localhost:8000>. Opening `index.html` directly from the filesystem does not work (native ES modules cannot load over `file://`).
 - See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup and contribution workflow.
 
 ## Required of any assistant working here
 
+- **Never commit directly to `main`.** All work — code, docs, plans, specs, even one-line fixes — goes on a feature branch and is merged via PR after CI passes. No exceptions without explicit confirmation from the user.
 - **Always** run `deno task check && deno task test` and confirm clean output before reporting any work as done. Do not assume; confirm.
 - Follow the conventions in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — specifically:
   - audio scheduling uses absolute `actx.currentTime` values, never `setTimeout`
