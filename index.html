@@ -1216,7 +1216,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       let trackGains = {};
       let rainGainNode = null;
       let ambienceGain = null;
-      let spatialDrift = 0;
       let complexity = 0.5;
       let isPlaying = false,
         schedulerTimer = null;
@@ -1387,7 +1386,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         humLFO.start();
 
         startTapeHiss();
-        startDrift();
         startScratches();
 
         applyMoodSettings(currentMood);
@@ -1585,13 +1583,10 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
       }
 
       // ── Safari-safe spatial ───────────────────────────────────────────────────────
-      function makeSpatial(role, driftPan = 0) {
+      function makeSpatial(role) {
         const s = SPATIAL[role] || { pan: 0, dist: 0.3 };
         const pan = actx.createStereoPanner();
-        pan.pan.value = Math.max(
-          -1,
-          Math.min(1, s.pan + driftPan * Math.sin(spatialDrift * 0.3)),
-        );
+        pan.pan.value = Math.max(-1, Math.min(1, s.pan));
         const distGain = actx.createGain();
         distGain.gain.value = 1 - s.dist * 0.55;
         const distFilt = actx.createBiquadFilter();
@@ -1601,16 +1596,6 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         distFilt.connect(distGain);
         distGain.connect(pan);
         return { input: distFilt, output: pan };
-      }
-
-      function startDrift() {
-        let t = 0;
-        setInterval(() => {
-          if (isPlaying) {
-            t += 0.05;
-            spatialDrift = t;
-          }
-        }, 50);
       }
 
       // ── Vinyl scratch ─────────────────────────────────────────────────────────────
@@ -1714,7 +1699,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(1800, time);
           filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
           filt.Q.value = 0.8;
-          const sp = makeSpatial(role, role === "rhodesMel" ? 0.12 : 0.04);
+          const sp = makeSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1750,7 +1735,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           g.gain.linearRampToValueAtTime(v, time + 0.005); // very fast attack
           g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
           g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4); // rings out
-          const sp = makeSpatial(role, 0.04);
+          const sp = makeSpatial(role);
           o.connect(g);
           g.connect(sp.input);
           sp.output.connect(trackGains[trackKey]);
@@ -1789,7 +1774,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.frequency.setValueAtTime(5000, time);
           filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
           filt.Q.value = 0.5;
-          const sp = makeSpatial(role, 0.06);
+          const sp = makeSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1823,7 +1808,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
           filt.type = "lowpass";
           filt.frequency.value = 900;
           filt.Q.value = 0.4;
-          const sp = makeSpatial(role, 0.08);
+          const sp = makeSpatial(role);
           o.connect(filt);
           filt.connect(g);
           g.connect(sp.input);
@@ -1855,7 +1840,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         reverb2.buffer = buildIR(1.5, 0.6);
         const rv = actx.createGain();
         rv.gain.value = 0.5;
-        const sp = makeSpatial(role, 0.06);
+        const sp = makeSpatial(role);
         o.connect(g);
         g.connect(sp.input);
         sp.output.connect(trackGains[trackKey]);
@@ -1902,7 +1887,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         g.gain.linearRampToValueAtTime(vel, time + m.bassAttack);
         g.gain.setValueAtTime(vel * 0.75, time + 0.1);
         g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.88);
-        const sp = makeSpatial("bass", 0.03);
+        const sp = makeSpatial("bass");
         o.connect(filt);
         o2.connect(filt);
         filt.connect(g);
@@ -1977,7 +1962,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         const g = actx.createGain();
         g.gain.setValueAtTime(vol, time);
         g.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
-        const sp = makeSpatial("snare", 0.03);
+        const sp = makeSpatial("snare");
         src.connect(filt);
         filt.connect(g);
         g.connect(sp.input);
@@ -2001,7 +1986,7 @@ fn blobField(uv: vec2f, cx: f32, cy: f32, r: f32) -> f32 {
         const g = actx.createGain();
         g.gain.setValueAtTime(vol * moodVol, time);
         g.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
-        const sp = makeSpatial("hat", 0.05);
+        const sp = makeSpatial("hat");
         src.connect(filt);
         filt.connect(g);
         g.connect(sp.input);
