@@ -31,7 +31,9 @@ Deno.test("integrity: every mood that says ambience!='rain' has rain<0.5 in defa
       assertEquals(
         DEFAULT_SETTINGS[mood].rain < 0.5,
         true,
-        `${mood} has ambience=${MOOD_META[mood].ambience} but rain default is ${DEFAULT_SETTINGS[mood].rain}`,
+        `${mood} has ambience=${MOOD_META[mood].ambience} but rain default is ${
+          DEFAULT_SETTINGS[mood].rain
+        }`,
       );
     }
   }
