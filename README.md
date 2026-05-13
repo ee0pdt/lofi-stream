@@ -30,9 +30,24 @@ open it.
 
 ## For developers
 
-Vanilla TypeScript on top of the Web Audio API — no frameworks, no runtime dependencies. See
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) to run it locally, or
-[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for how it's put together.
+Vanilla TypeScript on top of the Web Audio API — no frameworks, no runtime dependencies.
+[Deno](https://deno.com) is the only tool you need.
+
+```bash
+git clone git@github.com:ee0pdt/lofi-stream.git
+cd lofi-stream
+deno task dev          # http://localhost:8000
+```
+
+Other tasks:
+
+- `deno task check` — fmt, lint, unicode scan, type-check
+- `deno task test` — run the test suite
+- `deno task build` — bundle to `dist/main.js` (what Pages serves)
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full contributor flow (pre-commit hook, PR
+checklist, adding a new mood) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for how the audio
+engine, scheduler, and modules fit together.
 
 ## Licence
 
