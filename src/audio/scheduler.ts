@@ -304,6 +304,17 @@ export function flushScheduler(audio: AudioRefs, store: Store<AppState>): void {
   tick(audio, store);
 }
 
+/**
+ * Re-anchor the lookahead cursor to "now". Called by mood-change after the
+ * old in-flight audio has been severed from the master bus: the previous
+ * `nextBarTime` is still parked at the tail of the old buffer (~3 s out),
+ * so without this the first new-mood bar wouldn't play until after the
+ * fade-in has finished.
+ */
+export function resetSchedulerTime(audio: AudioRefs): void {
+  nextBarTime = audio.actx.currentTime + 0.1;
+}
+
 /** Update tempo; the next scheduled bar uses the new value. */
 export function setCurrentBPM(bpm: number): void {
   currentBPM = bpm;

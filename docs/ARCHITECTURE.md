@@ -84,7 +84,7 @@ Lookahead scheduler in `src/audio/scheduler.ts`. 50 ms `setTimeout` tick interva
 
 ## Mood switching
 
-`changeMood` in `src/main.ts`: crossfades master gain down (0.7 s), swaps `store.currentMood`, applies the new mood's saved mixer settings, calls `newProgression` (which rolls a fresh key/BPM/swing for the mood and rebuilds the reverb IR), restarts ambience, then fades up (1.2 s) to the new mood's saved volume. Each mood has its own slider state in the controls module's `moodSettings` map — switching moods restores that mood's last-used mixer values.
+`changeMood` in `src/main.ts`: fades master gain down (0.7 s), then at the end of the fade-out severs the scheduled lookahead — disconnects the `drums`/`bass`/`comp`/`melody` track gains from master and replaces them with fresh `GainNode`s — so oscillators already queued for the old mood play out into orphaned nodes and never reach the bus. The old `nextBarTime` (parked ~3 s out at the tail of the old buffer) is reset via `resetSchedulerTime` so the first new-mood bar lands during the fade-in. Then swaps `store.currentMood`, applies the new mood's saved mixer settings, calls `newProgression` (which rolls a fresh key/BPM/swing for the mood and rebuilds the reverb IR), restarts ambience, and fades master up (1.2 s) to the new mood's saved volume. Hiss, scratches, ambience, hum, and rain are left wired during the swap so they cross-fade with master. Each mood has its own slider state in the controls module's `moodSettings` map — switching moods restores that mood's last-used mixer values.
 
 ## UI
 
