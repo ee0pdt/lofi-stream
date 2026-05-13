@@ -704,9 +704,11 @@
       // Commit E will drop this bridge entirely.
       import {
         applySettingToAudio,
+        buildRainLayers,
         createAmplitudeReader,
         createStore,
         cycleCurrentKey,
+        DEFAULT_SETTINGS,
         flushScheduler,
         initAudio,
         initialAppState,
@@ -718,14 +720,18 @@
         setCurrentBPM,
         startAmbience,
         startScheduler,
+        startScratches,
+        startTapeHiss,
         stopAmbience,
         stopScheduler,
       } from "./dist/main.js";
 
       Object.assign(window, {
         applySettingToAudioPure: applySettingToAudio,
+        buildRainLayers,
         createAmplitudeReader,
         cycleCurrentKey,
+        DEFAULT_SETTINGS,
         flushScheduler,
         initAudioPure: initAudio,
         MOOD_META,
@@ -736,6 +742,8 @@
         setCurrentBPM,
         startAmbience,
         startScheduler,
+        startScratches,
+        startTapeHiss,
         stopAmbience,
         stopScheduler,
       });
@@ -1023,6 +1031,7 @@
 
         if (!isPlaying) {
           currentMood = newMood;
+          window.__store.set({ currentMood: newMood });
           applyMoodSettings(newMood);
           return;
         }
@@ -1040,6 +1049,7 @@
         setTimeout(
           () => {
             currentMood = newMood;
+            window.__store.set({ currentMood: newMood });
             applyMoodSettings(newMood);
             window.newProgression(window.__audio, newMood, true);
             window.startAmbience(window.__audio, newMood, window.__store);
