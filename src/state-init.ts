@@ -1,46 +1,10 @@
 import { DEFAULT_SETTINGS } from "./music/settings.ts";
-import type { AppState, Mood, MoodSettings, Settings } from "./types.ts";
+import type { AppState } from "./types.ts";
 
-const MOODS: readonly Mood[] = ["rainy", "late", "cafe", "sleepy"];
-
-/**
- * Deep-clone the readonly per-mood Settings into mutable MoodSettings.
- */
-function cloneSettings(s: Settings): MoodSettings {
-  return {
-    drums: s.drums,
-    bass: s.bass,
-    comp: s.comp,
-    melody: s.melody,
-    hiss: s.hiss,
-    scratches: s.scratches,
-    hum: s.hum,
-    warp: s.warp,
-    ambience: s.ambience,
-    rain: s.rain,
-    reverb: s.reverb,
-    complexity: s.complexity,
-    vol: s.vol,
-  };
-}
-
-/**
- * Build the initial AppState. Per-mood mixer values are cloned from
- * DEFAULT_SETTINGS so sliders mutating them don't pollute the source-of-truth
- * defaults.
- */
 export function initialAppState(): AppState {
-  const moodSettings = {} as Record<Mood, MoodSettings>;
-  for (const m of MOODS) {
-    moodSettings[m] = cloneSettings(DEFAULT_SETTINGS[m]);
-  }
   return {
     currentMood: "rainy",
     isPlaying: false,
-    complexity: moodSettings.rainy.complexity,
-    moodSettings,
-    // Alias, not copy: slider writes go through currentSettings and must be
-    // observable on moodSettings[currentMood] for mood switches to persist.
-    currentSettings: moodSettings.rainy,
+    complexity: DEFAULT_SETTINGS.rainy.complexity,
   };
 }

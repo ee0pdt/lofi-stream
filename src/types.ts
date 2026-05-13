@@ -87,46 +87,24 @@ export interface Settings {
   readonly vol: number;
 }
 
-/**
- * Per-mood mutable mixer state. Same shape as `Settings` but mutable so
- * sliders can write to it during runtime.
- */
-export interface MoodSettings {
-  drums: number;
-  bass: number;
-  comp: number;
-  melody: number;
-  hiss: number;
-  scratches: number;
-  hum: number;
-  warp: number;
-  ambience: number;
-  rain: number;
-  reverb: number;
-  complexity: number;
-  vol: number;
-}
+/** Mutable mirror of `Settings` — sliders write directly. */
+export type MoodSettings = { -readonly [K in keyof Settings]: Settings[K] };
 
 /**
- * Reactive application state held by the store. Audio node references and
- * scheduler-internal state are intentionally NOT in here — see the design
- * spec for rationale.
+ * Reactive application state. Audio node references and scheduler-internal
+ * state are deliberately NOT here — the store is for things UI subscribes
+ * to. Per-mood mixer values live in `src/ui/controls.ts` as a private map.
  */
 export interface AppState {
   currentMood: Mood;
   isPlaying: boolean;
   complexity: number;
-  moodSettings: Record<Mood, MoodSettings>;
-  currentSettings: MoodSettings;
 }
 
 /**
  * Bag of audio node references built by `initAudio`. Owned by
- * `src/audio/graph.ts` (created in a later commit) and passed explicitly
- * to scheduler and cascade wirers. Functions that mutate audio (rebuild
- * reverb IR, restart ambience, apply warp, apply setting) are exported
- * as free functions from `audio/graph.ts` that take an `AudioRefs` as
- * their first argument.
+ * `src/audio/graph.ts` and passed explicitly to scheduler, UI, and the
+ * cascade wirers.
  */
 export interface AudioRefs {
   readonly actx: AudioContext;

@@ -10,6 +10,7 @@
  */
 
 import { noiseBuffer } from "./graph.ts";
+import { pickFrom, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
 
@@ -75,14 +76,6 @@ function buildAmbienceForMood(audio: AudioRefs, mood: Mood): void {
     loopedNoise(audio, 120, "lowpass", 1.2, 0.28, 0.0, dest);
     loopedNoise(audio, 3000, "highpass", 0.5, 0.02, 0.0, dest);
   }
-}
-
-function randRange(a: number, b: number): number {
-  return a + Math.random() * (b - a);
-}
-
-function pickFrom<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 /**

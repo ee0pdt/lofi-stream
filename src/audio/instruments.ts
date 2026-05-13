@@ -11,6 +11,7 @@
 
 import { MOOD_META } from "../music/moods.ts";
 import { applyWarp, buildIR, makeHaasSpatial, makeSpatial, noiseBuffer } from "./graph.ts";
+import { randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
 
@@ -33,6 +34,13 @@ export function swungTime(
 }
 
 const FLASH_DUR = 80;
+let cachedCelestaIR: AudioBuffer | null = null;
+
+function roleRouting(role: string): { trackKey: string; rowId: string } {
+  return role === "rhodesMel"
+    ? { trackKey: "melody", rowId: "mx-melody" }
+    : { trackKey: "comp", rowId: "mx-comp" };
+}
 
 /**
  * Fire a brief CSS flash on the given mixer-row's range input at the
@@ -57,10 +65,6 @@ export function flashRow(
   }, Math.max(0, delayMs));
 }
 
-function randRange(a: number, b: number): number {
-  return a + Math.random() * (b - a);
-}
-
 export function playRhodes(
   audio: AudioRefs,
   midi: number,
@@ -69,19 +73,21 @@ export function playRhodes(
   vel = 0.16,
   role = "rhodesComp",
 ): void {
-  const trackKey = role === "rhodesMel" ? "melody" : "comp";
-  const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
-  [
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
+  const partials: ReadonlyArray<readonly [number, OscillatorType]> = [
     [midiToFreq(midi), "sine"],
     [midiToFreq(midi) * 1.004, "sine"],
     [midiToFreq(midi) * 0.997, "triangle"],
-  ].forEach(([f, type], i) => {
+  ];
+  partials.forEach(([f, type], i) => {
     if (i === 0) flashRow(audio.actx, rowId, time, 120);
     const o = audio.actx.createOscillator();
     const g = audio.actx.createGain();
     const filt = audio.actx.createBiquadFilter();
-    o.type = type as OscillatorType;
-    o.frequency.value = f as number;
+    o.type = type;
+    o.frequency.value = f;
     applyWarp(audio, o);
     const v = vel * (i === 2 ? 0.3 : 1);
     g.gain.setValueAtTime(0, time);
@@ -93,11 +99,9 @@ export function playRhodes(
     filt.frequency.setValueAtTime(1800, time);
     filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
     filt.Q.value = 0.8;
-    const sp = makeHaasSpatial(audio, role);
     o.connect(filt);
     filt.connect(g);
     g.connect(sp.input);
-    sp.output.connect(audio.trackGains[trackKey]);
     o.start(time);
     o.stop(time + dur + 0.05);
   });
@@ -111,8 +115,9 @@ export function playVibraphone(
   vel = 0.14,
   role = "rhodesComp",
 ): void {
-  const trackKey = role === "rhodesMel" ? "melody" : "comp";
-  const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
   const f = midiToFreq(midi);
   [
     [f, 0.9],
@@ -129,10 +134,8 @@ export function playVibraphone(
     g.gain.linearRampToValueAtTime(v, time + 0.005);
     g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
     g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4);
-    const sp = makeHaasSpatial(audio, role);
     o.connect(g);
     g.connect(sp.input);
-    sp.output.connect(audio.trackGains[trackKey]);
     o.start(time);
     o.stop(time + dur * 1.5);
   });
@@ -146,8 +149,9 @@ export function playGuitar(
   vel = 0.18,
   role = "rhodesComp",
 ): void {
-  const trackKey = role === "rhodesMel" ? "melody" : "comp";
-  const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
   const f = midiToFreq(midi);
   [
     [f, 1],
@@ -171,11 +175,9 @@ export function playGuitar(
     filt.frequency.setValueAtTime(5000, time);
     filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
     filt.Q.value = 0.5;
-    const sp = makeHaasSpatial(audio, role);
     o.connect(filt);
     filt.connect(g);
     g.connect(sp.input);
-    sp.output.connect(audio.trackGains[trackKey]);
     o.start(time);
     o.stop(time + Math.min(dur, 0.65));
   });
@@ -190,8 +192,9 @@ export function playPad(
   role = "rhodesComp",
   bpm = 80,
 ): void {
-  const trackKey = role === "rhodesMel" ? "melody" : "comp";
-  const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
   const f = midiToFreq(midi);
   const bd = beatDur(bpm);
   [
@@ -213,11 +216,9 @@ export function playPad(
     filt.type = "lowpass";
     filt.frequency.value = 900;
     filt.Q.value = 0.4;
-    const sp = makeHaasSpatial(audio, role);
     o.connect(filt);
     filt.connect(g);
     g.connect(sp.input);
-    sp.output.connect(audio.trackGains[trackKey]);
     o.start(time);
     o.stop(time + dur + bd * 0.6);
   });
@@ -231,8 +232,7 @@ export function playCelesta(
   vel = 0.1,
   role = "rhodesComp",
 ): void {
-  const trackKey = role === "rhodesMel" ? "melody" : "comp";
-  const rowId = role === "rhodesMel" ? "mx-melody" : "mx-comp";
+  const { trackKey, rowId } = roleRouting(role);
   flashRow(audio.actx, rowId, time, 90);
   const f = midiToFreq(midi + 12);
   const o = audio.actx.createOscillator();
@@ -244,8 +244,9 @@ export function playCelesta(
   g.gain.linearRampToValueAtTime(vel * 0.6, time + 0.004);
   g.gain.exponentialRampToValueAtTime(vel * 0.08, time + 0.2);
   g.gain.exponentialRampToValueAtTime(0.0001, time + Math.min(dur * 0.9, 1.2));
+  if (cachedCelestaIR === null) cachedCelestaIR = buildIR(audio, 1.5, 0.6);
   const reverb2 = audio.actx.createConvolver();
-  reverb2.buffer = buildIR(audio, 1.5, 0.6);
+  reverb2.buffer = cachedCelestaIR;
   const rv = audio.actx.createGain();
   rv.gain.value = 0.5;
   const sp = makeHaasSpatial(audio, role);

@@ -10,6 +10,7 @@
  */
 
 import { MOOD_META } from "../music/moods.ts";
+import { DEFAULT_SETTINGS } from "../music/settings.ts";
 import type { AppState, AudioRefs, Mood, MoodSettings } from "../types.ts";
 import type { Store } from "../store.ts";
 
@@ -38,11 +39,12 @@ function clampPan(v: number): number {
 }
 
 /**
- * Slider-curve helper: maps a 0-1 linear control into a perceptual-ish
- * gain. Cubic gives a sane "quiet but audible" feel at 30% slider.
+ * Slider-curve helper: maps a 0-1 linear control to a perceptual gain.
+ * Quadratic — must match the curve the volume slider produces, since
+ * mood-change fades and per-track gains both feed through it.
  */
-function sliderToGain(v: number): number {
-  return v * v * v;
+export function sliderToGain(v: number): number {
+  return v * v;
 }
 
 /**
@@ -202,65 +204,6 @@ export function applySettingToAudio(
 }
 
 /**
- * Wire the mood-change cascade. On `currentMood` change:
- * fade master gain to 0, rebuild reverb IR, swap ambience, call
- * the scheduler's mood-change hook, swap `currentSettings`, then
- * fade back up to the new mood's volume.
- *
- * Returns the unsubscribe function from the store.
- */
-export function wireMoodCascade(
-  store: Store<AppState>,
-  audio: AudioRefs,
-  onMoodChanged: (newMood: Mood) => void,
-  restartAmbience: (newMood: Mood) => void,
-): () => void {
-  return store.subscribe(
-    (s) => s.currentMood,
-    async (newMood) => {
-      const t = audio.actx.currentTime;
-      audio.masterGain.gain.cancelScheduledValues(t);
-      audio.masterGain.gain.setValueAtTime(audio.masterGain.gain.value, t);
-      audio.masterGain.gain.linearRampToValueAtTime(0, t + 0.7);
-      await new Promise<void>((r) => setTimeout(r, 700));
-
-      applyMoodReverb(audio, newMood);
-      restartAmbience(newMood);
-      onMoodChanged(newMood);
-
-      const newSettings = store.get().moodSettings[newMood];
-      store.set({ currentSettings: newSettings });
-
-      const t2 = audio.actx.currentTime;
-      audio.masterGain.gain.cancelScheduledValues(t2);
-      audio.masterGain.gain.setValueAtTime(0, t2);
-      audio.masterGain.gain.linearRampToValueAtTime(
-        sliderToGain(newSettings.vol),
-        t2 + 1.2,
-      );
-    },
-  );
-}
-
-/**
- * Wire the mixer cascade. Whenever `currentSettings` changes (typically
- * after a mood swap), re-apply every slider value to its audio param.
- */
-export function wireMixerCascade(
-  store: Store<AppState>,
-  audio: AudioRefs,
-): () => void {
-  return store.subscribe(
-    (s) => s.currentSettings,
-    (next) => {
-      for (const key of Object.keys(next) as Array<keyof MoodSettings>) {
-        applySettingToAudio(audio, key, next[key]);
-      }
-    },
-  );
-}
-
-/**
  * Construct the full audio graph. Must be called inside a user gesture
  * handler. Reads `currentMood` from the store; the caller is responsible
  * for everything else (starting the scheduler, mounting cascades).
@@ -321,7 +264,7 @@ export function initAudio(store: Store<AppState>): AudioRefs {
 
   const convolver = actx.createConvolver();
   const wetGain = actx.createGain();
-  wetGain.gain.value = store.get().currentSettings.reverb;
+  wetGain.gain.value = DEFAULT_SETTINGS[store.get().currentMood].reverb;
   const dryGain = actx.createGain();
   dryGain.gain.value = 0.68;
   const analyser = actx.createAnalyser();

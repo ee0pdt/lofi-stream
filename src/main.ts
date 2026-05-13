@@ -8,7 +8,7 @@
 
 import { createStore } from "./store.ts";
 import { initialAppState } from "./state-init.ts";
-import { initAudio } from "./audio/graph.ts";
+import { initAudio, sliderToGain } from "./audio/graph.ts";
 import {
   cycleCurrentKey,
   flushScheduler,
@@ -17,9 +17,8 @@ import {
   startScheduler,
   stopScheduler,
 } from "./audio/scheduler.ts";
-import { startAmbience, stopAmbience } from "./audio/ambience.ts";
+import { buildRainLayers, startAmbience, stopAmbience } from "./audio/ambience.ts";
 import { startScratches, startTapeHiss } from "./audio/instruments.ts";
-import { buildRainLayers } from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
 import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
 import { mountControls } from "./ui/controls.ts";
@@ -31,9 +30,6 @@ import type { AudioRefs, Mood } from "./types.ts";
 const store = createStore(initialAppState());
 let audio: AudioRefs | null = null;
 let moodChangeInProgress = false;
-let isPlaying = false;
-
-const sliderToGain = (v: number): number => v * v;
 
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;
@@ -60,7 +56,7 @@ function changeMood(newMood: Mood): void {
   setActiveMoodButton(newMood);
   applyMoodUI(newMood);
 
-  if (!isPlaying) {
+  if (!store.get().isPlaying) {
     store.set({ currentMood: newMood });
     controls.applyMoodSettings(newMood);
     return;
@@ -103,9 +99,7 @@ mountPlayButton(async () => {
   if (!audio) {
     audio = initAudio(store);
     buildRainLayers(audio);
-    startAmbience(audio, store.get().currentMood, store);
     startTapeHiss(audio);
-    startScratches(audio, store);
     controls.applyMoodSettings(store.get().currentMood);
   }
   if (audio.actx.state === "suspended") await audio.actx.resume();
@@ -115,57 +109,51 @@ mountPlayButton(async () => {
     | null;
   const userVol = sliderToGain(parseFloat(volSlider?.value ?? "0.65"));
 
-  if (isPlaying) {
+  if (store.get().isPlaying) {
     const t = audio.actx.currentTime;
     audio.masterGain.gain.cancelScheduledValues(t);
     audio.masterGain.gain.setValueAtTime(audio.masterGain.gain.value, t);
     audio.masterGain.gain.linearRampToValueAtTime(0.0001, t + 0.5);
     setTimeout(() => {
       stopScheduler();
-      isPlaying = false;
       stopAmbience();
     }, 520);
+    store.set({ isPlaying: false });
     setPlayIcon(false);
     setStatusPlaying(false);
   } else {
     const t0 = audio.actx.currentTime;
     audio.masterGain.gain.cancelScheduledValues(t0);
     audio.masterGain.gain.setValueAtTime(0.0001, t0);
-    isPlaying = true;
+    store.set({ isPlaying: true });
     startScheduler(audio, store);
     startAmbience(audio, store.get().currentMood, store);
+    startScratches(audio, store);
     audio.masterGain.gain.linearRampToValueAtTime(userVol, t0 + 1.2);
     setPlayIcon(true);
     setStatusPlaying(true);
   }
 });
 
-// Skip — roll a new progression for the current mood.
 const skipBtn = document.getElementById("skipBtn");
 if (skipBtn) {
   skipBtn.addEventListener("click", () => {
-    if (isPlaying && audio) newProgression(audio, store.get().currentMood, true);
+    if (store.get().isPlaying && audio) newProgression(audio, store.get().currentMood, true);
   });
 }
 
-// BPM slider — live tempo control. Writes through to the scheduler.
 const bpmSlider = document.getElementById("bpmSlider");
 if (bpmSlider instanceof HTMLInputElement) {
-  bpmSlider.addEventListener("input", () => {
-    setCurrentBPM(parseInt(bpmSlider.value));
-  });
+  bpmSlider.addEventListener("input", () => setCurrentBPM(parseInt(bpmSlider.value)));
 }
 
-// Key chip — cycle through the 12 chromatic keys; phrase cache resets.
 const keyChip = document.getElementById("keyChip");
-if (keyChip) {
-  keyChip.addEventListener("click", () => cycleCurrentKey());
-}
+if (keyChip) keyChip.addEventListener("click", () => cycleCurrentKey());
 
 // Tab restore: resume the AudioContext (Safari suspends it when hidden)
 // and flush the scheduler so the 3-second buffer refills immediately.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible" || !isPlaying || !audio) return;
+  if (document.visibilityState !== "visible" || !store.get().isPlaying || !audio) return;
   if (audio.actx.state === "suspended") {
     audio.actx.resume().then(() => {
       if (audio) flushScheduler(audio, store);

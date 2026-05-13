@@ -1,22 +1,18 @@
 /**
- * Lookahead bar scheduler. Runs on a 50ms setTimeout cadence, schedules
- * any bar whose start is within `LOOKAHEAD_S` seconds of `actx.currentTime`.
+ * Lookahead bar scheduler. 50ms setTimeout cadence, schedules any bar
+ * whose start is within LOOKAHEAD_S of actx.currentTime.
  *
- * The 3-second lookahead is deliberate: Safari throttles setTimeout to
- * ~1 Hz when the tab is hidden, but the Web Audio clock keeps running.
- * As long as enough bars are pre-scheduled before the tab is hidden,
- * playback stays glitch-free until restore — at which point a
- * visibility-change handler flushes the scheduler.
- *
- * Form playhead, phrase cache, bpm/swing/key, and the next-bar time
- * all live as module-scope state. Mood changes call
- * `resetSchedulerStateForMoodChange` to roll a fresh progression.
+ * The 3-second lookahead is load-bearing: Safari throttles setTimeout
+ * to ~1 Hz when the tab is hidden, but the Web Audio clock keeps
+ * running. main.ts' visibility-change handler calls flushScheduler on
+ * restore to refill the buffer.
  */
 
 import { FORMS } from "../music/forms.ts";
 import { MOOD_META } from "../music/moods.ts";
 import { VOICINGS } from "../music/voicings.ts";
 import { walkingBassNotes } from "../music/bass.ts";
+import { compOct } from "../music/octaves.ts";
 import { currentSectionProg, nextFormPosition } from "../music/playhead.ts";
 import { generatePhrase, type Phrase } from "../music/phrase.ts";
 import {
@@ -38,6 +34,7 @@ import {
   swungTime,
 } from "./instruments.ts";
 import { applyMoodReverb } from "./graph.ts";
+import { pickFrom, randInt, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Form, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
 
@@ -47,7 +44,6 @@ const TICK_MS = 50;
 let currentForm: Form = [];
 let formSectionIdx = 0;
 let formBarInSection = 0;
-let formBarInProg = 0;
 let currentProgIdx = 0;
 let currentPhrase: Phrase | null = null;
 let phraseBarIdx = 0;
@@ -72,24 +68,6 @@ const NOTES = [
   "B",
 ];
 
-function randInt(a: number, b: number): number {
-  return a + Math.floor(Math.random() * (b - a + 1));
-}
-
-function pickFrom<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/**
- * Roll a new progression for `mood`. With `fresh = true` picks a new key
- * and BPM from the mood's pools and rebuilds the reverb IR. With
- * `fresh = false` just restarts the form playhead at the start of the
- * existing key/BPM (used when ramping bpm without a mood swap, etc.).
- *
- * Side-effects on the DOM (track name/bpm/key labels) happen here as a
- * tight visual response to the mood swap; commit E will move that to
- * the UI module.
- */
 export function newProgression(
   audio: AudioRefs,
   mood: Mood,
@@ -99,14 +77,12 @@ export function newProgression(
   if (fresh) {
     currentKey = pickFrom(meta.key_pool);
     currentBPM = randInt(meta.bpmRange[0], meta.bpmRange[1]);
-    swingAmount = meta.swingRange[0] +
-      Math.random() * (meta.swingRange[1] - meta.swingRange[0]);
+    swingAmount = randRange(meta.swingRange[0], meta.swingRange[1]);
     applyMoodReverb(audio, mood);
   }
   currentForm = FORMS[mood];
   formSectionIdx = 0;
   formBarInSection = 0;
-  formBarInProg = 0;
   currentProgIdx = 0;
   currentPhrase = null;
   phraseBarIdx = 0;
@@ -132,19 +108,7 @@ export function newProgression(
   }
 }
 
-/**
- * Called by the mood cascade. Resets scheduler-internal state and rolls
- * a new progression so the next scheduled bar reflects the new mood.
- */
-export function resetSchedulerStateForMoodChange(
-  audio: AudioRefs,
-  mood: Mood,
-): void {
-  newProgression(audio, mood, true);
-}
-
 function advancePlayhead(): void {
-  formBarInProg++;
   const { position, sectionChanged } = nextFormPosition(currentForm, {
     sectionIdx: formSectionIdx,
     barInSection: formBarInSection,
@@ -157,20 +121,13 @@ function advancePlayhead(): void {
   }
 }
 
-function compOct(m: number): number {
-  let n = m;
-  while (n > 71) n -= 12;
-  while (n < 48) n += 12;
-  return n;
-}
-
 function scheduleBar(
   audio: AudioRefs,
   store: Store<AppState>,
   barStart: number,
 ): void {
-  const mood = store.get().currentMood;
-  const complexity = store.get().complexity;
+  const s = store.get();
+  const { currentMood: mood, complexity } = s;
   const bd = beatDur(currentBPM);
 
   const prog = currentSectionProg(currentForm, {
@@ -335,9 +292,9 @@ export function stopScheduler(): void {
 }
 
 /**
- * After a hidden tab is restored, the scheduler may have missed several
- * 50ms ticks. Call this to clear the pending timer and immediately flush
- * the lookahead. Audio context resume is the caller's responsibility.
+ * After a hidden tab is restored, the scheduler may have missed ticks.
+ * Clear the pending timer and immediately flush the lookahead. AudioContext
+ * resume is the caller's responsibility.
  */
 export function flushScheduler(audio: AudioRefs, store: Store<AppState>): void {
   if (timerHandle != null) {
@@ -347,19 +304,7 @@ export function flushScheduler(audio: AudioRefs, store: Store<AppState>): void {
   tick(audio, store);
 }
 
-/** Read-only access for inline code that still needs current bpm/key. */
-export function getCurrentBPM(): number {
-  return currentBPM;
-}
-export function getCurrentKey(): number {
-  return currentKey;
-}
-
-/**
- * BPM slider write-through. Updates the scheduler's tempo, the bpm
- * readout, and the track sub-text. Does NOT clear the phrase — tempo
- * change keeps the melodic ideas in flight.
- */
+/** Update tempo; the next scheduled bar uses the new value. */
 export function setCurrentBPM(bpm: number): void {
   currentBPM = bpm;
   const bpmVal = document.getElementById("bpmVal");
@@ -368,11 +313,7 @@ export function setCurrentBPM(bpm: number): void {
   if (trackSub) trackSub.textContent = `${NOTES[currentKey]} · ${currentBPM} bpm`;
 }
 
-/**
- * Key-chip click handler. Cycles through the 12 chromatic keys, clears
- * the phrase cache so the next bar uses the new key, and updates the
- * key readout + track sub-text.
- */
+/** Cycle through the 12 chromatic keys. Clears the phrase cache. */
 export function cycleCurrentKey(): void {
   currentKey = (currentKey + 1) % 12;
   currentPhrase = null;

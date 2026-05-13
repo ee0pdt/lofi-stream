@@ -17,8 +17,8 @@ export interface PhraseNote {
 /** One bar of a phrase: an ordered list of notes (may be empty). */
 export type Bar = readonly PhraseNote[];
 
-/** A complete 4-bar phrase, one bar per chord in the source progression. */
-export type Phrase = readonly [Bar, Bar, Bar, Bar];
+/** A complete phrase: one bar per chord in the source progression (length 4). */
+export type Phrase = readonly Bar[];
 
 /**
  * Options for `generatePhrase`. `rng` is injectable for tests; when omitted
@@ -100,5 +100,5 @@ export function generatePhrase(
     bars.push(barMelody);
   });
 
-  return bars as unknown as Phrase;
+  return bars;
 }

@@ -119,32 +119,18 @@ export function mountControls(ctx: ControlsContext): ControlsHandle {
     });
   });
 
-  for (const key of ["rain", "reverb", "warp", "complexity"] as const) {
-    const slider = document.getElementById(
-      key === "rain"
-        ? "rainSlider"
-        : key === "reverb"
-        ? "reverbSlider"
-        : key === "warp"
-        ? "warpSlider"
-        : "complexitySlider",
-    ) as HTMLInputElement | null;
+  for (const key of ["rain", "reverb", "warp", "complexity", "vol"] as const) {
+    const slider = document.querySelector(TRACK_SLIDERS[key]) as
+      | HTMLInputElement
+      | null;
     if (!slider) continue;
     slider.addEventListener("input", () => {
       const val = parseFloat(slider.value);
-      const label = document.getElementById(valLabelFor(key));
-      if (label) label.textContent = String(Math.round(val * 100));
+      if (key !== "vol") {
+        const label = document.getElementById(valLabelFor(key));
+        if (label) label.textContent = String(Math.round(val * 100));
+      }
       dispatchSetting(ctx, moodSettings, key, val);
-    });
-  }
-
-  const volSlider = document.getElementById("volSlider") as
-    | HTMLInputElement
-    | null;
-  if (volSlider) {
-    volSlider.addEventListener("input", () => {
-      const val = parseFloat(volSlider.value);
-      dispatchSetting(ctx, moodSettings, "vol", val);
     });
   }
 
