@@ -2,8 +2,7 @@
 
 A single-page, zero-runtime-dependency generative lofi music player. Plays forever in your browser.
 
-→ **Try it:** https://ee0pdt.github.io/lofi-stream/ _(activates once Phase 8 of the migration
-lands)_
+→ **Try it:** https://ee0pdt.github.io/lofi-stream/
 
 ## What it is
 
