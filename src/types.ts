@@ -86,3 +86,39 @@ export interface Settings {
   readonly complexity: number;
   readonly vol: number;
 }
+
+/** Mutable mirror of `Settings` — sliders write directly. */
+export type MoodSettings = { -readonly [K in keyof Settings]: Settings[K] };
+
+/**
+ * Reactive application state. Audio node references and scheduler-internal
+ * state are deliberately NOT here — the store is for things UI subscribes
+ * to. Per-mood mixer values live in `src/ui/controls.ts` as a private map.
+ */
+export interface AppState {
+  currentMood: Mood;
+  isPlaying: boolean;
+  complexity: number;
+}
+
+/**
+ * Bag of audio node references built by `initAudio`. Owned by
+ * `src/audio/graph.ts` and passed explicitly to scheduler, UI, and the
+ * cascade wirers.
+ */
+export interface AudioRefs {
+  readonly actx: AudioContext;
+  readonly masterGain: GainNode;
+  readonly compressor: DynamicsCompressorNode;
+  readonly lowShelf: BiquadFilterNode;
+  readonly highShelf: BiquadFilterNode;
+  readonly dryGain: GainNode;
+  readonly wetGain: GainNode;
+  readonly convolver: ConvolverNode;
+  readonly analyser: AnalyserNode;
+  readonly trackGains: Record<string, GainNode>;
+  readonly warpModGain: GainNode;
+  readonly humGain: GainNode;
+  readonly ambienceGain: GainNode;
+  readonly rainGain: GainNode;
+}
