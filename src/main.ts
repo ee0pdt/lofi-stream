@@ -13,6 +13,7 @@ import {
   cycleCurrentKey,
   flushScheduler,
   newProgression,
+  resetSchedulerTime,
   setCurrentBPM,
   startScheduler,
   stopScheduler,
@@ -74,6 +75,22 @@ function changeMood(newMood: Mood): void {
   a.masterGain.gain.linearRampToValueAtTime(0.0001, now + fadeOut);
 
   setTimeout(() => {
+    // Sever the in-flight lookahead: oscillators already scheduled for the
+    // old mood are wired to these trackGains. Disconnecting them from
+    // master orphans their downstream nodes (they keep ticking into the
+    // void until their own stop() fires, then GC). Fresh GainNodes take
+    // their place in `audio.trackGains` so the next scheduled bar wires up
+    // to them. Hiss / scratches / ambience / hum / rain are left alone —
+    // they cross-fade with master.
+    for (const key of ["drums", "bass", "comp", "melody"] as const) {
+      a.trackGains[key].disconnect();
+      const g = a.actx.createGain();
+      g.gain.value = 1;
+      g.connect(a.masterGain);
+      a.trackGains[key] = g;
+    }
+    resetSchedulerTime(a);
+
     store.set({ currentMood: newMood });
     controls.applyMoodSettings(newMood);
     newProgression(a, newMood, true);
