@@ -1,34 +1,38 @@
 # lofi forever
 
-A single-page, zero-runtime-dependency generative lofi music player. Plays forever in your browser.
+Low-key lofi beats for chilling or concentration while you vibe-code (or raw-code) your latest and
+greatest.
 
-→ **Try it:** https://ee0pdt.github.io/lofi-stream/
+→ **[Try it](https://ee0pdt.github.io/lofi-stream/)**
 
-## What it is
+![lofi forever, rainy mood](./docs/screenshots/hero.png)
 
-- 4-bar phrases over fixed per-mood chord progressions, with fresh voicings each bar
-- Per-mood timbres: rhodes, vibraphone, guitar, pad, celesta
-- Tape colour, wow/flutter, optional rain / traffic / room / wind ambience
-- WebGPU background (Canvas2D fallback)
-- No frameworks, no npm packages, no analytics
+You know the vibe. Headphones on, a rainy window somewhere in your peripheral vision, a cup of
+something warm, the deadline somewhere out of frame. _lofi forever_ is that — generated note by note
+in the browser, fresh every bar.
 
-## Running locally
+## Four moods
 
-1. Install [Deno](https://deno.com)
-2. Clone this repo
-3. `deno task dev`, then open <http://localhost:8000>
+- **rainy** — grey afternoon, window seat, soft rain
+- **late night** — 3am brew, city lights, last bus
+- **café** — warm espresso, cosy corner, notebook
+- **sleepy** — almost asleep, blanket hour, dim lamp
 
-The app uses native ES modules and is served from the build output in `dist/`. Opening `index.html`
-directly from the filesystem (`file://`) will not work in modern browsers; use the dev server or the
-deployed GH Pages URL.
+Pick one and the player improvises forever. Fresh chord voicings every bar, warm rhodes and vibes, a
+little tape wobble, optional rain or café murmur. It never repeats.
 
-## Contributing
+![café mood](./docs/screenshots/cafe.png)
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+## What it is, what it isn't
 
-## Architecture
+One browser tab that plays forever. No account, no ads, no algorithm picking the next track. Just
+open it.
 
-See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+## For developers
+
+Vanilla TypeScript on top of the Web Audio API — no frameworks, no runtime dependencies. See
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) to run it locally, or
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for how it's put together.
 
 ## Licence
 
