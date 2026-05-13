@@ -10,8 +10,10 @@ import { createStore } from "./store.ts";
 import { initialAppState } from "./state-init.ts";
 import { initAudio } from "./audio/graph.ts";
 import {
+  cycleCurrentKey,
   flushScheduler,
   newProgression,
+  setCurrentBPM,
   startScheduler,
   stopScheduler,
 } from "./audio/scheduler.ts";
@@ -144,6 +146,20 @@ if (skipBtn) {
   skipBtn.addEventListener("click", () => {
     if (isPlaying && audio) newProgression(audio, store.get().currentMood, true);
   });
+}
+
+// BPM slider — live tempo control. Writes through to the scheduler.
+const bpmSlider = document.getElementById("bpmSlider");
+if (bpmSlider instanceof HTMLInputElement) {
+  bpmSlider.addEventListener("input", () => {
+    setCurrentBPM(parseInt(bpmSlider.value));
+  });
+}
+
+// Key chip — cycle through the 12 chromatic keys; phrase cache resets.
+const keyChip = document.getElementById("keyChip");
+if (keyChip) {
+  keyChip.addEventListener("click", () => cycleCurrentKey());
 }
 
 // Tab restore: resume the AudioContext (Safari suspends it when hidden)
