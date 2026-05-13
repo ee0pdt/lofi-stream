@@ -16,11 +16,11 @@ There is no `npm install`, no `node_modules`. Deno is the only tool.
 
 ## Tasks
 
-- `deno task check` — formatter, linter, unicode scanner (from Phase 1), type-check (from Phase 2)
+- `deno task check` — formatter, linter, unicode scanner, type-check
 - `deno task test` — all tests
 - `deno task fix` — auto-fix formatting and lint issues
-- `deno task dev` — local dev server (from Phase 2)
-- `deno task build` — produce `dist/` for deployment (from Phase 2)
+- `deno task dev` — local dev server
+- `deno task build` — produce `dist/` for deployment
 
 ## Before opening a PR
 
@@ -28,7 +28,7 @@ There is no `npm install`, no `node_modules`. Deno is the only tool.
 - `deno task test` passes
 - New behaviour has a test where reasonable (especially anything in `src/music/`)
 
-## Adding a new mood (from Phase 2 onward)
+## Adding a new mood
 
 1. Add an entry to `src/music/moods.ts` (`MOOD_META`)
 2. Add a form to `src/music/forms.ts` (`FORMS`)
