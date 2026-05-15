@@ -3,7 +3,7 @@ import { FORMS } from "../src/music/forms.ts";
 import { VOICINGS } from "../src/music/voicings.ts";
 import type { Mood } from "../src/types.ts";
 
-const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy"];
+const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy", "transit"];
 
 Deno.test("FORMS: contains exactly the four expected moods", () => {
   assertEquals(Object.keys(FORMS).sort(), [...MOODS].sort());
@@ -75,4 +75,10 @@ Deno.test("FORMS.sleepy: matches the known 32-bar AAAB A structure", () => {
   const bars = FORMS.sleepy.map((s) => s.bars);
   assertEquals(bars, [8, 8, 8, 8]);
   assertEquals(bars.reduce((a, b) => a + b, 0), 32);
+});
+
+Deno.test("FORMS.transit: matches the known 24-bar AABB'A' structure", () => {
+  const bars = FORMS.transit.map((s) => s.bars);
+  assertEquals(bars, [8, 8, 4, 2, 2]);
+  assertEquals(bars.reduce((a, b) => a + b, 0), 24);
 });

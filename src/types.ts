@@ -1,5 +1,5 @@
 /**
- * The four moods the app supports today.
+ * The five moods the app supports.
  */
 export type Mood = "rainy" | "late" | "cafe" | "sleepy" | "transit";
 

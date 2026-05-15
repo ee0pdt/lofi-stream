@@ -195,4 +195,53 @@ export const FORMS: Record<Mood, Form> = {
       ],
     },
   ],
+
+  // TRANSIT — 24 bars: AABB'A'
+  transit: [
+    {
+      bars: 8,
+      prog: [
+        [0, "min7"],
+        [3, "maj7"],
+        [5, "min9"],
+        [8, "maj7"],
+      ],
+    }, // A home
+    {
+      bars: 8,
+      prog: [
+        [0, "min7"],
+        [5, "min7"],
+        [3, "maj7"],
+        [8, "maj7"],
+      ],
+    }, // A variant
+    {
+      bars: 4,
+      prog: [
+        [0, "min9"],
+        [7, "min7"],
+        [3, "maj9"],
+        [5, "min7"],
+      ],
+    }, // B lift
+    {
+      bars: 2,
+      prog: [
+        [5, "min7b5"],
+        [8, "dom9"],
+        [3, "maj7"],
+        [0, "min7"],
+      ],
+    }, // B' darker
+    {
+      bars: 2,
+      prog: [
+        [0, "min7"],
+        [3, "maj7"],
+        [5, "min9"],
+        [8, "maj7"],
+      ],
+    }, // A' return
+  ],
 };
