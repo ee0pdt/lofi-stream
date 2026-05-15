@@ -392,7 +392,7 @@ export function playHat(
   vol = 0.06,
 ): void {
   flashRow(audio.actx, "mx-drums", time, 40);
-  const moodVol = { rainy: 1, late: 0.9, cafe: 0.7, sleepy: 0.5 }[mood] ?? 1;
+  const moodVol = { rainy: 1, late: 0.9, cafe: 0.7, sleepy: 0.5, transit: 0.6 }[mood] ?? 1;
   const len = open ? 0.22 : 0.04;
   const b = noiseBuffer(audio.actx, len);
   const src = audio.actx.createBufferSource();

@@ -17,6 +17,7 @@ const MOOD_UI: Record<Mood, MoodPalette> = {
   late: { warm: "#a886d8", warm2: "#c4a8e8" },
   cafe: { warm: "#c97d40", warm2: "#e8b07a" },
   sleepy: { warm: "#6db5a8", warm2: "#9dd1c5" },
+  transit: { warm: "#7b2fff", warm2: "#a06fff" },
 };
 
 export function applyMoodUI(mood: Mood): void {
