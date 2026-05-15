@@ -36,13 +36,23 @@ src/
 │   │                              buildIR, applyMoodReverb, makeSpatial,
 │   │                              makeHaasSpatial, applySettingToAudio,
 │   │                              noiseBuffer, SPATIAL constants.
-│   ├── instruments.ts          ← playKick/Snare/Hat + playRhodes/Vibraphone/
-│   │                              Guitar/Pad/Celesta + dispatchers playComp/
-│   │                              playMelody + playBass, plus startTapeHiss,
-│   │                              startScratches/playVinylScratch, flashRow,
-│   │                              midiToFreq, beatDur, swungTime.
+│   ├── voices.ts               ← playComp/playMelody dispatchers (pick timbre
+│   │                              from MOOD_META then call timbres/*) + playBass.
+│   ├── timbres/                ← one file per instrument; all pure Web Audio,
+│   │   ├── routing.ts          │    no music logic. Each file exports a single
+│   │   ├── rhodes.ts           │    play* function: (audio, midi, time, dur,
+│   │   ├── vibraphone.ts       │    vel, role?) → void. routing.ts maps role
+│   │   ├── guitar.ts           │    strings to trackKey + rowId.
+│   │   ├── pad.ts              │
+│   │   ├── coldsynth.ts        │
+│   │   ├── celesta.ts          │
+│   │   ├── bell.ts             │
+│   │   ├── kick.ts             │
+│   │   ├── snare.ts            │
+│   │   └── hat.ts              ←
 │   ├── ambience.ts             ← per-mood ambience: noise beds, scheduled
 │   │                              siren (late), clinks (cafe), rain layers.
+│   ├── timing.ts               ← midiToFreq, beatDur, swungTime.
 │   └── scheduler.ts            ← lookahead bar scheduler, scheduleBar,
 │                                  newProgression, key/BPM setters. Owns the
 │                                  form playhead + phrase cache + nextBarTime.
@@ -104,3 +114,44 @@ Three places hold state, by intent:
 - New oscillators that should respond to global warp must be wired through `applyWarp(audio, osc)` after creation.
 - Per-mood differences belong in `MOOD_META` and `FORMS` — avoid `if (currentMood === ...)` branches deep in the scheduler; add a config field instead.
 - Audio refs (`AudioContext`, gain nodes, etc.) live in `src/audio/graph.ts`. Scheduler-internal state lives in `src/audio/scheduler.ts`. Reactive UI/settings state lives in `src/store.ts`. Don't mix the layers.
+
+## One bar, start to finish
+
+This is the path a single bar takes through the system — useful when tracing a bug or adding a new instrument.
+
+1. **`tick()`** (scheduler.ts) fires every 50 ms via `setTimeout`. It loops while `nextBarTime < actx.currentTime + 3.0`, calling `scheduleBar()` for each bar that falls inside the lookahead window.
+
+2. **`scheduleBar()`** reads the current form position to get the active `prog` — a 4-chord array of `[rootOffsetSemitones, voicingName]`. It resolves the root MIDI note, looks up the voicing intervals from `VOICINGS`, and schedules:
+   - **Comp** — `playComp()` in `voices.ts`, which dispatches to the timbre chosen in `MOOD_META[mood].compTimbre` (e.g. `playRhodes`).
+   - **Melody** — `playMelody()` similarly dispatches on `melTimbre`. The melody is drawn from a 4-bar `Phrase` generated once per section by `generatePhrase()` and cached in `currentPhrase`.
+   - **Bass** — `playBass()` (in `voices.ts`) schedules up to 4 walking-bass notes directly.
+   - **Drums** — kick, snare, hat, open-hat scheduled step by step from the 16-step pattern arrays, with swing applied by `swungTime()`.
+
+3. Every **timbre function** (`src/audio/timbres/*.ts`) creates oscillators/noise nodes, sets up envelope `AudioParam` ramps, connects through a spatial panner, and routes its output to the appropriate track gain node (`audio.trackGains.comp`, `.melody`, `.bass`, `.drums`). It calls `osc.start(time)` and `osc.stop(time + dur + 0.05)` — the node is self-disposing.
+
+4. All track gains flow to `masterGain` → compressor → tape EQ → dry+reverb split → analyser → destination.
+
+5. After scheduling, `currentProgIdx` is incremented and `advancePlayhead()` moves the form cursor. `nextBarTime` advances by one bar duration.
+
+## Glossary
+
+Domain terms used throughout the codebase:
+
+| Term | Meaning |
+|------|---------|
+| **mood** | One of the named scenes (`rainy`, `late`, `cafe`, `sleepy`). Controls BPM range, swing, allowed keys, reverb shape, timbre choices, and ambience type. |
+| **form** | The overall song structure for a mood: an ordered list of sections that loop. Defined in `FORMS` (`src/music/forms.ts`). |
+| **section** | One unit within a form: a `{ bars, prog }` pair. The scheduler plays the section's `prog` for `bars` bars before advancing to the next section. |
+| **prog** | Short for "chord progression". An array of 4 `[rootOffset, voicingName]` pairs that cycle within a section. |
+| **rootOffset** | Semitone offset from `currentKey` to the chord root. `0` = tonic, `5` = fourth, `7` = fifth, etc. |
+| **voicing** | A chord quality recipe: an array of semitone intervals above the root. Defined in `VOICINGS` (`src/music/voicings.ts`). E.g. `min7 = [0, 3, 7, 10]`. |
+| **phrase** | A 4-bar melodic sequence generated by `generatePhrase()`. Generated fresh at the start of each section, then reused bar-by-bar until the next section. |
+| **comp** | The chordal/harmonic instrument (comping). Track gain key: `comp`. |
+| **mel / melody** | The single-note melodic line. Track gain key: `melody`. |
+| **timbre** | Which instrument plays comp or melody for a given mood — e.g. `rhodes`, `vibraphone`, `guitar`, `pad`, `coldsynth`, `celesta`, `bell`. Set in `MOOD_META[mood].compTimbre` / `melTimbre`. |
+| **role** | A string tag passed to timbre functions to distinguish comp (`"rhodesComp"`) from melody (`"rhodesMel"`). `roleRouting()` maps it to a track gain key and mixer row ID. |
+| **warp** | The global wow/flutter LFO. Oscillators wired through `applyWarp()` have their detune modulated by a shared LFO, giving the tape-warble effect. |
+| **swing** | Delay applied to off-beat 16th-note steps via `swungTime()`. A value of `0` is straight; `~0.08–0.12` is a loose jazz shuffle. |
+| **BPM** | Tempo in beats per minute. Randomised within `MOOD_META[mood].bpmRange` on each `newProgression()` call. |
+| **lookahead** | The 3-second window the scheduler fills ahead of `actx.currentTime`. Sized for Safari's throttled background tab behaviour. |
+| **ambience** | The non-musical background layer for a mood: rain, traffic noise, café clinks, etc. Lives in `src/audio/ambience.ts`, bypasses the track gains. |
