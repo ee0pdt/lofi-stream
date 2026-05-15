@@ -32,14 +32,14 @@ function makeLoopedNoise(
   filt.type = type;
   filt.frequency.value = freq;
   filt.Q.value = Q;
-  const g = audio.actx.createGain();
-  g.gain.value = gainVal;
-  const p = audio.actx.createStereoPanner();
-  p.pan.value = panVal;
+  const gainNode = audio.actx.createGain();
+  gainNode.gain.value = gainVal;
+  const panner = audio.actx.createStereoPanner();
+  panner.pan.value = panVal;
   src.connect(filt);
-  filt.connect(g);
-  g.connect(p);
-  p.connect(dest);
+  filt.connect(gainNode);
+  gainNode.connect(panner);
+  panner.connect(dest);
   src.start();
   return src;
 }
@@ -125,24 +125,24 @@ function scheduleSiren(audio: AudioRefs, store: Store<AppState>): void {
     const now = audio.actx.currentTime;
     const baseFreq = pickFrom([440, 550, 660]);
     const dur = randRange(1.5, 3.0);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const p = audio.actx.createStereoPanner();
-    p.pan.value = randRange(-0.6, 0.6);
-    o.type = "sine";
-    o.frequency.setValueAtTime(baseFreq, now);
-    o.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur * 0.3);
-    o.frequency.linearRampToValueAtTime(baseFreq, now + dur * 0.6);
-    o.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur);
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.03, now + 0.3);
-    g.gain.setValueAtTime(0.03, now + dur - 0.3);
-    g.gain.linearRampToValueAtTime(0, now + dur);
-    o.connect(g);
-    g.connect(p);
-    p.connect(audio.ambienceGain);
-    o.start(now);
-    o.stop(now + dur);
+    const osc = audio.actx.createOscillator();
+    const gainNode = audio.actx.createGain();
+    const panner = audio.actx.createStereoPanner();
+    panner.pan.value = randRange(-0.6, 0.6);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur * 0.3);
+    osc.frequency.linearRampToValueAtTime(baseFreq, now + dur * 0.6);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 1.15, now + dur);
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.03, now + 0.3);
+    gainNode.gain.setValueAtTime(0.03, now + dur - 0.3);
+    gainNode.gain.linearRampToValueAtTime(0, now + dur);
+    osc.connect(gainNode);
+    gainNode.connect(panner);
+    panner.connect(audio.ambienceGain);
+    osc.start(now);
+    osc.stop(now + dur);
     scheduleSiren(audio, store);
   }, delay);
 }
@@ -159,18 +159,18 @@ function scheduleClink(audio: AudioRefs, store: Store<AppState>): void {
     const now = audio.actx.currentTime;
     [1, 1.52, 2.1].forEach((ratio, idx) => {
       const freq = randRange(2400, 3600) * ratio;
-      const o = audio.actx.createOscillator();
-      const g = audio.actx.createGain();
-      o.type = "sine";
-      o.frequency.value = freq;
-      const t = now + idx * 0.002;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.04, t + 0.001);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      o.connect(g);
-      g.connect(audio.ambienceGain);
-      o.start(t);
-      o.stop(t + 0.2);
+      const osc = audio.actx.createOscillator();
+      const gainNode = audio.actx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const startTime = now + idx * 0.002;
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.04, startTime + 0.001);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+      osc.connect(gainNode);
+      gainNode.connect(audio.ambienceGain);
+      osc.start(startTime);
+      osc.stop(startTime + 0.2);
     });
     scheduleClink(audio, store);
   }, delay);
@@ -183,26 +183,26 @@ function scheduleTransitSweep(audio: AudioRefs, store: Store<AppState>): void {
     if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
     const now = audio.actx.currentTime;
     const dur = randRange(5, 9);
-    const o = audio.actx.createOscillator();
+    const osc = audio.actx.createOscillator();
     const filt = audio.actx.createBiquadFilter();
-    const g = audio.actx.createGain();
-    const p = audio.actx.createStereoPanner();
-    o.type = "sawtooth";
-    o.frequency.value = randRange(60, 120);
+    const gainNode = audio.actx.createGain();
+    const panner = audio.actx.createStereoPanner();
+    osc.type = "sawtooth";
+    osc.frequency.value = randRange(60, 120);
     filt.type = "lowpass";
     filt.frequency.value = 300;
     filt.Q.value = 2.0;
-    p.pan.value = randRange(-0.5, 0.5);
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.08, now + 1);
-    g.gain.setValueAtTime(0.08, now + dur - 1.5);
-    g.gain.linearRampToValueAtTime(0, now + dur);
-    o.connect(filt);
-    filt.connect(g);
-    g.connect(p);
-    p.connect(audio.ambienceGain);
-    o.start(now);
-    o.stop(now + dur);
+    panner.pan.value = randRange(-0.5, 0.5);
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.08, now + 1);
+    gainNode.gain.setValueAtTime(0.08, now + dur - 1.5);
+    gainNode.gain.linearRampToValueAtTime(0, now + dur);
+    osc.connect(filt);
+    filt.connect(gainNode);
+    gainNode.connect(panner);
+    panner.connect(audio.ambienceGain);
+    osc.start(now);
+    osc.stop(now + dur);
     scheduleTransitSweep(audio, store);
   }, delay);
 }
@@ -217,17 +217,17 @@ function scheduleTransitStab(audio: AudioRefs, store: Store<AppState>): void {
     const rootFreq = 110 * Math.pow(2, pickFrom([0, 2, 3, 5, 8]) / 12);
     const detunes = [0, 8, -8];
     detunes.forEach((detuneCents) => {
-      const o = audio.actx.createOscillator();
-      const g = audio.actx.createGain();
-      o.type = "sine";
-      o.frequency.value = rootFreq * Math.pow(2, detuneCents / 1200);
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.05, now + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-      o.connect(g);
-      g.connect(audio.ambienceGain);
-      o.start(now);
-      o.stop(now + 0.45);
+      const osc = audio.actx.createOscillator();
+      const gainNode = audio.actx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = rootFreq * Math.pow(2, detuneCents / 1200);
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.05, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      osc.connect(gainNode);
+      gainNode.connect(audio.ambienceGain);
+      osc.start(now);
+      osc.stop(now + 0.45);
     });
     scheduleTransitStab(audio, store);
   }, delay);
@@ -244,23 +244,23 @@ function scheduleTransitSwell(audio: AudioRefs, store: Store<AppState>): void {
     const fadeOut = 4;
     const totalDur = fadeIn + hold + fadeOut;
     [0, 6].forEach((detuneCents) => {
-      const o = audio.actx.createOscillator();
+      const osc = audio.actx.createOscillator();
       const filt = audio.actx.createBiquadFilter();
-      const g = audio.actx.createGain();
-      o.type = "sawtooth";
-      o.frequency.value = 110 * Math.pow(2, detuneCents / 1200);
+      const gainNode = audio.actx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = 110 * Math.pow(2, detuneCents / 1200);
       filt.type = "lowpass";
       filt.frequency.value = 400;
       filt.Q.value = 1.0;
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.06, now + fadeIn);
-      g.gain.setValueAtTime(0.06, now + fadeIn + hold);
-      g.gain.linearRampToValueAtTime(0, now + totalDur);
-      o.connect(filt);
-      filt.connect(g);
-      g.connect(audio.ambienceGain);
-      o.start(now);
-      o.stop(now + totalDur);
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.06, now + fadeIn);
+      gainNode.gain.setValueAtTime(0.06, now + fadeIn + hold);
+      gainNode.gain.linearRampToValueAtTime(0, now + totalDur);
+      osc.connect(filt);
+      filt.connect(gainNode);
+      gainNode.connect(audio.ambienceGain);
+      osc.start(now);
+      osc.stop(now + totalDur);
     });
     scheduleTransitSwell(audio, store);
   }, delay);
@@ -273,20 +273,20 @@ function scheduleTransitPing(audio: AudioRefs, store: Store<AppState>): void {
     if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
     const now = audio.actx.currentTime;
     const freq = randRange(2000, 4000);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const p = audio.actx.createStereoPanner();
-    o.type = "sine";
-    o.frequency.value = freq;
-    p.pan.value = randRange(-0.3, 0.3);
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.04, now + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 2);
-    o.connect(g);
-    g.connect(p);
-    p.connect(audio.ambienceGain);
-    o.start(now);
-    o.stop(now + 2.1);
+    const osc = audio.actx.createOscillator();
+    const gainNode = audio.actx.createGain();
+    const panner = audio.actx.createStereoPanner();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    panner.pan.value = randRange(-0.3, 0.3);
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.04, now + 0.005);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 2);
+    osc.connect(gainNode);
+    gainNode.connect(panner);
+    panner.connect(audio.ambienceGain);
+    osc.start(now);
+    osc.stop(now + 2.1);
     scheduleTransitPing(audio, store);
   }, delay);
 }
@@ -310,22 +310,22 @@ export function buildRainLayers(audio: AudioRefs): void {
     filt.type = type;
     filt.frequency.value = freq;
     filt.Q.value = Q;
-    const g = audio.actx.createGain();
-    g.gain.value = gain;
-    const p = audio.actx.createStereoPanner();
-    p.pan.value = pan;
+    const gainNode = audio.actx.createGain();
+    gainNode.gain.value = gain;
+    const panner = audio.actx.createStereoPanner();
+    panner.pan.value = pan;
     src.connect(filt);
-    filt.connect(g);
-    g.connect(p);
-    p.connect(audio.rainGain);
+    filt.connect(gainNode);
+    gainNode.connect(panner);
+    panner.connect(audio.rainGain);
     src.start();
   }
 }
 
 export function stopAmbience(): void {
-  for (const s of currentSources) {
+  for (const source of currentSources) {
     try {
-      s.stop();
+      source.stop();
     } catch (_) {
       // already stopped
     }
@@ -379,14 +379,14 @@ export function startTapeHiss(audio: AudioRefs): void {
       filt.type = "bandpass";
       filt.frequency.value = freq;
       filt.Q.value = Q;
-      const g = audio.actx.createGain();
-      g.gain.value = gain;
-      const p = audio.actx.createStereoPanner();
-      p.pan.value = panValue;
+      const gainNode = audio.actx.createGain();
+      gainNode.gain.value = gain;
+      const panner = audio.actx.createStereoPanner();
+      panner.pan.value = panValue;
       src.connect(filt);
-      filt.connect(g);
-      g.connect(p);
-      p.connect(audio.trackGains.hiss);
+      filt.connect(gainNode);
+      gainNode.connect(panner);
+      panner.connect(audio.trackGains.hiss);
       src.start();
     }
   }
@@ -432,12 +432,12 @@ export function playVinylScratch(
       0.0001,
       now + offset + grainDur,
     );
-    const p = audio.actx.createStereoPanner();
-    p.pan.value = randRange(-0.4, 0.4);
+    const panner = audio.actx.createStereoPanner();
+    panner.pan.value = randRange(-0.4, 0.4);
     src.connect(filt);
     filt.connect(gainNode);
-    gainNode.connect(p);
-    p.connect(audio.trackGains.scratches);
+    gainNode.connect(panner);
+    panner.connect(audio.trackGains.scratches);
     src.start(now + offset);
     src.stop(now + offset + grainDur + 0.02);
   }

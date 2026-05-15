@@ -21,11 +21,11 @@ export function playComp(
   mood: Mood,
   bpm: number,
 ): void {
-  const t = MOOD_META[mood].compTimbre;
-  if (t === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
-  else if (t === "guitar") playGuitar(audio, midi, time, dur, vel, role);
-  else if (t === "pad") playPad(audio, midi, time, dur, vel, role, bpm);
-  else if (t === "coldsynth") playColdsynth(audio, midi, time, dur, vel, role, bpm);
+  const timbre = MOOD_META[mood].compTimbre;
+  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
+  else if (timbre === "guitar") playGuitar(audio, midi, time, dur, vel, role);
+  else if (timbre === "pad") playPad(audio, midi, time, dur, vel, role, bpm);
+  else if (timbre === "coldsynth") playColdsynth(audio, midi, time, dur, vel, role, bpm);
   else playRhodes(audio, midi, time, dur, vel, role);
 }
 
@@ -38,10 +38,10 @@ export function playMelody(
   role: string,
   mood: Mood,
 ): void {
-  const t = MOOD_META[mood].melTimbre;
-  if (t === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
-  else if (t === "celesta") playCelesta(audio, midi, time, dur, vel, role);
-  else if (t === "bell") playBell(audio, midi, time, dur, vel, role);
+  const timbre = MOOD_META[mood].melTimbre;
+  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
+  else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role);
+  else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role);
   else playRhodes(audio, midi, time, dur, vel, role);
 }
 
@@ -54,32 +54,32 @@ export function playBass(
   mood: Mood = "rainy",
 ): void {
   if (vel >= 0.28) flashRow(audio.actx, "mx-bass", time, 100);
-  const m = MOOD_META[mood];
-  const o = audio.actx.createOscillator();
-  const o2 = audio.actx.createOscillator();
-  const g = audio.actx.createGain();
+  const moodMeta = MOOD_META[mood];
+  const osc = audio.actx.createOscillator();
+  const oscSub = audio.actx.createOscillator();
+  const gainNode = audio.actx.createGain();
   const filt = audio.actx.createBiquadFilter();
-  o.type = "triangle";
-  o2.type = "sine";
-  o.frequency.value = midiToFreq(midi);
-  o2.frequency.value = midiToFreq(midi - 12);
-  applyWarp(audio, o);
-  applyWarp(audio, o2);
+  osc.type = "triangle";
+  oscSub.type = "sine";
+  osc.frequency.value = midiToFreq(midi);
+  oscSub.frequency.value = midiToFreq(midi - 12);
+  applyWarp(audio, osc);
+  applyWarp(audio, oscSub);
   filt.type = "lowpass";
-  filt.frequency.value = m.bassFilter;
+  filt.frequency.value = moodMeta.bassFilter;
   filt.Q.value = 1.1;
-  g.gain.setValueAtTime(0, time);
-  g.gain.linearRampToValueAtTime(vel, time + m.bassAttack);
-  g.gain.setValueAtTime(vel * 0.75, time + 0.1);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.88);
+  gainNode.gain.setValueAtTime(0, time);
+  gainNode.gain.linearRampToValueAtTime(vel, time + moodMeta.bassAttack);
+  gainNode.gain.setValueAtTime(vel * 0.75, time + 0.1);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.88);
   const sp = makeSpatial(audio, "bass");
-  o.connect(filt);
-  o2.connect(filt);
-  filt.connect(g);
-  g.connect(sp.input);
+  osc.connect(filt);
+  oscSub.connect(filt);
+  filt.connect(gainNode);
+  gainNode.connect(sp.input);
   sp.output.connect(audio.trackGains.bass);
-  o.start(time);
-  o2.start(time);
-  o.stop(time + dur + 0.05);
-  o2.stop(time + dur + 0.05);
+  osc.start(time);
+  oscSub.start(time);
+  osc.stop(time + dur + 0.05);
+  oscSub.stop(time + dur + 0.05);
 }

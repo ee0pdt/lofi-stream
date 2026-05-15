@@ -15,26 +15,26 @@ export function playBell(
   const { trackKey, rowId } = roleRouting(role);
   const sp = makeHaasSpatial(audio, role);
   sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi + 12);
+  const freq = midiToFreq(midi + 12);
   const harmonics: [number, number][] = [
-    [f, 1.0],
-    [f * 2, 0.35],
-    [f * 3, 0.12],
+    [freq, 1.0],
+    [freq * 2, 0.35],
+    [freq * 3, 0.12],
   ];
-  harmonics.forEach(([freq, amp], idx) => {
+  harmonics.forEach(([partialFreq, amp], idx) => {
     if (idx === 0) flashRow(audio.actx, rowId, time, 120);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
+    const osc = audio.actx.createOscillator();
+    const gainNode = audio.actx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = partialFreq;
+    applyWarp(audio, osc);
     const decayTime = Math.max(0.4, Math.min(dur * 0.85, 2.5)) * (1 - idx * 0.2);
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(vel * amp, time + 0.001);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + decayTime);
-    o.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + decayTime + 0.05);
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(vel * amp, time + 0.001);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, time + decayTime);
+    osc.connect(gainNode);
+    gainNode.connect(sp.input);
+    osc.start(time);
+    osc.stop(time + decayTime + 0.05);
   });
 }

@@ -71,13 +71,13 @@ function changeMood(newMood: Mood): void {
   if (moodChangeInProgress || !audio) return;
   moodChangeInProgress = true;
 
-  const a = audio;
+  const refs = audio;
   const fadeOut = 0.7;
   const fadeIn = 1.2;
-  const now = a.actx.currentTime;
-  a.masterGain.gain.cancelScheduledValues(now);
-  a.masterGain.gain.setValueAtTime(a.masterGain.gain.value, now);
-  a.masterGain.gain.linearRampToValueAtTime(0.0001, now + fadeOut);
+  const now = refs.actx.currentTime;
+  refs.masterGain.gain.cancelScheduledValues(now);
+  refs.masterGain.gain.setValueAtTime(refs.masterGain.gain.value, now);
+  refs.masterGain.gain.linearRampToValueAtTime(0.0001, now + fadeOut);
 
   setTimeout(() => {
     // Sever the in-flight lookahead: oscillators already scheduled for the
@@ -88,18 +88,18 @@ function changeMood(newMood: Mood): void {
     // to them. Hiss / scratches / ambience / hum / rain are left alone —
     // they cross-fade with master.
     for (const key of ["drums", "bass", "comp", "melody"] as const) {
-      a.trackGains[key].disconnect();
-      const g = a.actx.createGain();
-      g.gain.value = 1;
-      g.connect(a.masterGain);
-      a.trackGains[key] = g;
+      refs.trackGains[key].disconnect();
+      const gainNode = refs.actx.createGain();
+      gainNode.gain.value = 1;
+      gainNode.connect(refs.masterGain);
+      refs.trackGains[key] = gainNode;
     }
-    resetSchedulerTime(a);
+    resetSchedulerTime(refs);
 
     store.set({ currentMood: newMood });
     controls.applyMoodSettings(newMood);
-    newProgression(a, newMood, true);
-    startAmbience(a, newMood, store);
+    newProgression(refs, newMood, true);
+    startAmbience(refs, newMood, store);
 
     const volSlider = document.getElementById("volSlider") as
       | HTMLInputElement
@@ -107,10 +107,10 @@ function changeMood(newMood: Mood): void {
     const userVol = sliderToGain(
       parseFloat(volSlider?.value ?? "0.65"),
     );
-    const t = a.actx.currentTime;
-    a.masterGain.gain.cancelScheduledValues(t);
-    a.masterGain.gain.setValueAtTime(0.0001, t);
-    a.masterGain.gain.linearRampToValueAtTime(userVol, t + fadeIn);
+    const fadeInStart = refs.actx.currentTime;
+    refs.masterGain.gain.cancelScheduledValues(fadeInStart);
+    refs.masterGain.gain.setValueAtTime(0.0001, fadeInStart);
+    refs.masterGain.gain.linearRampToValueAtTime(userVol, fadeInStart + fadeIn);
     moodChangeInProgress = false;
   }, fadeOut * 1000 + 30);
 }
@@ -132,10 +132,10 @@ mountPlayButton(async () => {
   const userVol = sliderToGain(parseFloat(volSlider?.value ?? "0.65"));
 
   if (store.get().isPlaying) {
-    const t = audio.actx.currentTime;
-    audio.masterGain.gain.cancelScheduledValues(t);
-    audio.masterGain.gain.setValueAtTime(audio.masterGain.gain.value, t);
-    audio.masterGain.gain.linearRampToValueAtTime(0.0001, t + 0.5);
+    const now = audio.actx.currentTime;
+    audio.masterGain.gain.cancelScheduledValues(now);
+    audio.masterGain.gain.setValueAtTime(audio.masterGain.gain.value, now);
+    audio.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
     setTimeout(() => {
       stopScheduler();
       stopAmbience();
@@ -144,14 +144,14 @@ mountPlayButton(async () => {
     setPlayIcon(false);
     setStatusPlaying(false);
   } else {
-    const t0 = audio.actx.currentTime;
-    audio.masterGain.gain.cancelScheduledValues(t0);
-    audio.masterGain.gain.setValueAtTime(0.0001, t0);
+    const now = audio.actx.currentTime;
+    audio.masterGain.gain.cancelScheduledValues(now);
+    audio.masterGain.gain.setValueAtTime(0.0001, now);
     store.set({ isPlaying: true });
     startScheduler(audio, store);
     startAmbience(audio, store.get().currentMood, store);
     startScratches(audio, store);
-    audio.masterGain.gain.linearRampToValueAtTime(userVol, t0 + 1.2);
+    audio.masterGain.gain.linearRampToValueAtTime(userVol, now + 1.2);
     setPlayIcon(true);
     setStatusPlaying(true);
   }

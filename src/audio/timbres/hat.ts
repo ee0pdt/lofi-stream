@@ -12,19 +12,19 @@ export function playHat(
   flashRow(audio.actx, "mx-drums", time, 40);
   const moodVol = { rainy: 1, late: 0.9, cafe: 0.7, sleepy: 0.5, transit: 0.6 }[mood] ?? 1;
   const len = open ? 0.22 : 0.04;
-  const b = noiseBuffer(audio.actx, len);
+  const noiseBuf = noiseBuffer(audio.actx, len);
   const src = audio.actx.createBufferSource();
-  src.buffer = b;
+  src.buffer = noiseBuf;
   const filt = audio.actx.createBiquadFilter();
   filt.type = "highpass";
   filt.frequency.value = mood === "cafe" ? 11000 : 9000;
-  const g = audio.actx.createGain();
-  g.gain.setValueAtTime(vol * moodVol, time);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
+  const gainNode = audio.actx.createGain();
+  gainNode.gain.setValueAtTime(vol * moodVol, time);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
   const sp = makeSpatial(audio, "hat");
   src.connect(filt);
-  filt.connect(g);
-  g.connect(sp.input);
+  filt.connect(gainNode);
+  gainNode.connect(sp.input);
   sp.output.connect(audio.trackGains.drums);
   src.start(time);
 }

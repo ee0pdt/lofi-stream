@@ -121,8 +121,8 @@ function scheduleBar(
   store: Store<AppState>,
   barStart: number,
 ): void {
-  const s = store.get();
-  const { currentMood: mood, complexity } = s;
+  const state = store.get();
+  const { currentMood: mood, complexity } = state;
   const bd = beatDur(currentBPM);
 
   const prog = currentSectionProg(currentForm, {
@@ -143,10 +143,10 @@ function scheduleBar(
   const chordDur = bd * (isPad ? 3.8 : 1.75);
 
   voicing.forEach((interval, i) => {
-    const m = compOct(rootMidi + interval);
+    const midiNote = compOct(rootMidi + interval);
     const vel = 0.11 - i * 0.015;
     const strum = i * 0.02;
-    playComp(audio, m, barStart + strum, chordDur, vel, "rhodesComp", mood, currentBPM);
+    playComp(audio, midiNote, barStart + strum, chordDur, vel, "rhodesComp", mood, currentBPM);
 
     if (
       !isPad &&
@@ -155,7 +155,7 @@ function scheduleBar(
     ) {
       playComp(
         audio,
-        m,
+        midiNote,
         barStart + bd * 2 + strum * 0.5,
         chordDur * 0.85,
         vel * 0.6,
@@ -173,7 +173,7 @@ function scheduleBar(
     ) {
       playComp(
         audio,
-        m,
+        midiNote,
         barStart + bd * 1.5 + strum * 0.3,
         bd * 0.4,
         vel * 0.5,
@@ -193,9 +193,9 @@ function scheduleBar(
   }
   const barMelody = currentPhrase[phraseBarIdx % currentPhrase.length];
   for (const note of barMelody) {
-    const t = barStart + note.beat;
-    if (t >= barStart - 0.01) {
-      playMelody(audio, note.midi, t, note.dur, 0.17, "rhodesMel", mood);
+    const noteTime = barStart + note.beat;
+    if (noteTime >= barStart - 0.01) {
+      playMelody(audio, note.midi, noteTime, note.dur, 0.17, "rhodesMel", mood);
     }
   }
   const nextBarMelody = currentPhrase[(phraseBarIdx + 1) % currentPhrase.length];
@@ -213,12 +213,12 @@ function scheduleBar(
   phraseBarIdx++;
 
   const bassNotes = walkingBassNotes(rootMidi, voicing, nextRoot);
-  bassNotes.forEach((m, i) => {
+  bassNotes.forEach((midiNote, i) => {
     const vel = i === 0 ? 0.3 : 0.22;
     if (mood === "sleepy" && i !== 0 && i !== 2) return;
     if (complexity < 0.3 && i !== 0 && i !== 2) return;
     if (complexity < 0.55 && i === 3) return;
-    playBass(audio, m, barStart + bd * i, bd * 0.88, vel, mood);
+    playBass(audio, midiNote, barStart + bd * i, bd * 0.88, vel, mood);
   });
 
   if (complexity > 0.7 && Math.random() < (complexity - 0.5) * 1.2) {
@@ -229,21 +229,21 @@ function scheduleBar(
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
 
   for (let i = 0; i < 16; i++) {
-    const t = swungTime(i, barStart, currentBPM, swingAmount);
+    const stepTime = swungTime(i, barStart, currentBPM, swingAmount);
 
-    if (kickPat[i]) playKick(audio, t, mood);
+    if (kickPat[i]) playKick(audio, stepTime, mood);
 
-    if (SNARE_PAT[i]) playSnare(audio, t, mood, false);
+    if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false);
 
     if (GHOST_PAT[i] && Math.random() < complexity * 0.7) {
-      playSnare(audio, t, mood, true);
+      playSnare(audio, stepTime, mood, true);
     }
 
     if (HAT_PAT[i]) {
       const isQuarter = i % 4 === 0;
       if (isQuarter || complexity > 0.35) {
         const vol = 0.05 + Math.random() * 0.025;
-        playHat(audio, t, mood, false, vol * (isQuarter ? 1.0 : 0.6 + complexity * 0.4));
+        playHat(audio, stepTime, mood, false, vol * (isQuarter ? 1.0 : 0.6 + complexity * 0.4));
       }
     }
 
@@ -252,11 +252,11 @@ function scheduleBar(
       complexity > 0.75 &&
       Math.random() < (complexity - 0.65) * 2
     ) {
-      playHat(audio, t, mood, false, 0.025 + Math.random() * 0.02);
+      playHat(audio, stepTime, mood, false, 0.025 + Math.random() * 0.02);
     }
 
     if (OPEN_PAT[i] && mood !== "sleepy" && complexity > 0.4) {
-      playHat(audio, t, mood, true, 0.06);
+      playHat(audio, stepTime, mood, true, 0.06);
     }
   }
 }
