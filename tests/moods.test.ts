@@ -4,7 +4,7 @@ import type { Mood } from "../src/types.ts";
 
 const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy", "transit"];
 
-Deno.test("MOOD_META: contains exactly the four expected moods", () => {
+Deno.test("MOOD_META: contains exactly the five expected moods", () => {
   assertEquals(Object.keys(MOOD_META).sort(), [...MOODS].sort());
 });
 
