@@ -260,6 +260,82 @@ export function playCelesta(
   o.stop(time + Math.min(dur, 1.3));
 }
 
+export function playBell(
+  audio: AudioRefs,
+  midi: number,
+  time: number,
+  dur: number,
+  vel = 0.1,
+  role = "rhodesComp",
+): void {
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
+  const f = midiToFreq(midi + 12);
+  const harmonics: [number, number][] = [
+    [f, 1.0],
+    [f * 2, 0.35],
+    [f * 3, 0.12],
+  ];
+  harmonics.forEach(([freq, amp], idx) => {
+    if (idx === 0) flashRow(audio.actx, rowId, time, 120);
+    const o = audio.actx.createOscillator();
+    const g = audio.actx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    applyWarp(audio, o);
+    const decayTime = Math.max(0.4, Math.min(dur * 0.85, 2.5)) * (1 - idx * 0.2);
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(vel * amp, time + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + decayTime);
+    o.connect(g);
+    g.connect(sp.input);
+    o.start(time);
+    o.stop(time + decayTime + 0.05);
+  });
+}
+
+export function playColdsynth(
+  audio: AudioRefs,
+  midi: number,
+  time: number,
+  dur: number,
+  vel = 0.1,
+  role = "rhodesComp",
+  bpm = 80,
+): void {
+  const { trackKey, rowId } = roleRouting(role);
+  const sp = makeHaasSpatial(audio, role);
+  sp.output.connect(audio.trackGains[trackKey]);
+  const f = midiToFreq(midi);
+  const bd = beatDur(bpm);
+  [
+    [f, 1.0],
+    [f * 1.003, 0.8],
+    [f * 0.997, 0.8],
+  ].forEach(([freq], idx) => {
+    if (idx === 0) flashRow(audio.actx, rowId, time, 300);
+    const o = audio.actx.createOscillator();
+    const g = audio.actx.createGain();
+    const filt = audio.actx.createBiquadFilter();
+    o.type = "sawtooth";
+    o.frequency.value = freq;
+    applyWarp(audio, o);
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(vel, time + 0.05);
+    g.gain.setValueAtTime(vel, time + dur * 0.6);
+    g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.3);
+    filt.type = "lowpass";
+    filt.frequency.value = 1600;
+    filt.Q.value = 0.6;
+    o.connect(filt);
+    filt.connect(g);
+    g.connect(sp.input);
+    o.start(time);
+    o.stop(time + dur + bd * 0.4);
+  });
+}
+
 export function playComp(
   audio: AudioRefs,
   midi: number,
@@ -274,6 +350,7 @@ export function playComp(
   if (t === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
   else if (t === "guitar") playGuitar(audio, midi, time, dur, vel, role);
   else if (t === "pad") playPad(audio, midi, time, dur, vel, role, bpm);
+  else if (t === "coldsynth") playColdsynth(audio, midi, time, dur, vel, role, bpm);
   else playRhodes(audio, midi, time, dur, vel, role);
 }
 
@@ -289,6 +366,7 @@ export function playMelody(
   const t = MOOD_META[mood].melTimbre;
   if (t === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
   else if (t === "celesta") playCelesta(audio, midi, time, dur, vel, role);
+  else if (t === "bell") playBell(audio, midi, time, dur, vel, role);
   else playRhodes(audio, midi, time, dur, vel, role);
 }
 

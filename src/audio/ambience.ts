@@ -78,8 +78,6 @@ function buildAmbienceForMood(audio: AudioRefs, mood: Mood): void {
   } else if (mood === "transit") {
     // Sub rumble — constant low-end presence
     loopedNoise(audio, 90, "lowpass", 1.5, 0.20, 0.0, dest);
-    // Distant station hiss
-    loopedNoise(audio, 5000, "highpass", 0.8, 0.02, 0.0, dest);
 
     // Mid movement layer with slow LFO filter sweep
     const moveSrc = audio.actx.createBufferSource();

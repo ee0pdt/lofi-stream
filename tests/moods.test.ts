@@ -47,7 +47,7 @@ Deno.test("MOOD_META: reverb dur > 0, decay in (0, 1)", () => {
 });
 
 Deno.test("MOOD_META: compTimbre and melTimbre are valid timbres", () => {
-  const validTimbres = ["rhodes", "vibraphone", "guitar", "pad", "celesta"];
+  const validTimbres = ["rhodes", "vibraphone", "guitar", "pad", "celesta", "bell", "coldsynth"];
   for (const mood of MOODS) {
     assertEquals(
       validTimbres.includes(MOOD_META[mood].compTimbre),
@@ -91,8 +91,8 @@ Deno.test("MOOD_META.sleepy: spot-check known values", () => {
 Deno.test("MOOD_META.transit: spot-check known values", () => {
   const m = MOOD_META.transit;
   assertEquals(m.bpmRange, [60, 70]);
-  assertEquals(m.compTimbre, "pad");
-  assertEquals(m.melTimbre, "celesta");
+  assertEquals(m.compTimbre, "coldsynth");
+  assertEquals(m.melTimbre, "bell");
   assertEquals(m.ambience, "transit");
   assertEquals(m.names, ["platform 4", "last departure", "signal hold"]);
 });

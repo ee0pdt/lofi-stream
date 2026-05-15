@@ -6,7 +6,7 @@ export type Mood = "rainy" | "late" | "cafe" | "sleepy" | "transit";
 /**
  * Comp/melody timbre choice — one of five pre-built instrument voices.
  */
-export type Timbre = "rhodes" | "vibraphone" | "guitar" | "pad" | "celesta";
+export type Timbre = "rhodes" | "vibraphone" | "guitar" | "pad" | "celesta" | "bell" | "coldsynth";
 
 /**
  * Ambience layer choice per mood.
