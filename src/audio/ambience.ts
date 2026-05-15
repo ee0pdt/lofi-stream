@@ -93,7 +93,9 @@ function buildAmbienceForMood(audio: AudioRefs, mood: Mood): void {
     moveGain.gain.value = 0.10;
     const movePan = audio.actx.createStereoPanner();
     movePan.pan.value = 0.1;
-    // LFO: 0.03 Hz sine, ±200 Hz sweep around 600 Hz
+    // LFO: 0.03 Hz sine, ±200 Hz sweep around 600 Hz.
+    // Intermediate nodes (moveFilt, moveGain, movePan, lfoGain) are released
+    // by the browser once moveSrc and lfo are stopped via stopAmbience().
     const lfo = audio.actx.createOscillator();
     lfo.type = "sine";
     lfo.frequency.value = 0.03;
@@ -239,7 +241,10 @@ function scheduleTransitSwell(audio: AudioRefs, store: Store<AppState>): void {
   setTimeout(() => {
     if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
     const now = audio.actx.currentTime;
-    const totalDur = 4 + 3 + 4; // fade-in + hold + fade-out
+    const fadeIn = 4;
+    const hold = 3;
+    const fadeOut = 4;
+    const totalDur = fadeIn + hold + fadeOut;
     [0, 6].forEach((detuneCents) => {
       const o = audio.actx.createOscillator();
       const filt = audio.actx.createBiquadFilter();
@@ -250,8 +255,8 @@ function scheduleTransitSwell(audio: AudioRefs, store: Store<AppState>): void {
       filt.frequency.value = 400;
       filt.Q.value = 1.0;
       g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.06, now + 4);
-      g.gain.setValueAtTime(0.06, now + 7);
+      g.gain.linearRampToValueAtTime(0.06, now + fadeIn);
+      g.gain.setValueAtTime(0.06, now + fadeIn + hold);
       g.gain.linearRampToValueAtTime(0, now + totalDur);
       o.connect(filt);
       filt.connect(g);
