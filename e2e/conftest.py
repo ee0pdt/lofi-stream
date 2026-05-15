@@ -53,7 +53,7 @@ def browser(dev_server) -> Browser:
 
 
 @pytest.fixture
-def page(browser, dev_server) -> Page:
+def page(browser) -> Page:
     """
     Fresh page per test, pre-navigated to the app.
     Console errors that occur during the initial load are stored on
@@ -65,10 +65,10 @@ def page(browser, dev_server) -> Page:
     errors: List[str] = []
     pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
 
-    pg.goto(dev_server)
+    pg.goto(BASE_URL)
     pg.wait_for_load_state("load")
-    # Brief pause to let any async errors surface (e.g. module import failures).
-    time.sleep(0.3)
+    # Wait for the JS module to finish initialising (sets window.__lofi).
+    pg.wait_for_function("() => window.__lofi !== undefined")
 
     pg.console_errors = errors  # type: ignore[attr-defined]
     yield pg

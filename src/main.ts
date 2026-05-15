@@ -186,7 +186,7 @@ applyMoodUI(initialMood);
 setActiveMoodButton(initialMood);
 controls.applyMoodSettings(initialMood);
 
-// Minimal debug surface for e2e tests — not used by production code.
+// Debug surface used by e2e tests. Present in all builds; read-only and safe to ship.
 (window as Window & { __lofi?: { actxState: () => string } }).__lofi = {
   actxState: () => audio?.actx.state ?? "not-created",
 };

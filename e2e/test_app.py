@@ -3,8 +3,6 @@ E2e tests for lofi forever. Each test gets a fresh page pre-navigated to
 http://localhost:8000. The dev server is started once per session by conftest.
 """
 
-import time
-
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -97,7 +95,10 @@ def test_mood_switch_changes_css_accent(page: Page):
         "getComputedStyle(document.documentElement).getPropertyValue('--warm').trim()"
     )
     page.click('[data-mood="cafe"]')
-    time.sleep(0.1)  # applyMoodUI is synchronous but rAF may batch
+    page.wait_for_function(
+        "(expected) => getComputedStyle(document.documentElement).getPropertyValue('--warm').trim() !== expected",
+        arg=rainy_warm,
+    )
     cafe_warm = page.evaluate(
         "getComputedStyle(document.documentElement).getPropertyValue('--warm').trim()"
     )
