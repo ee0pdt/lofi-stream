@@ -1,13 +1,8 @@
 import { applyWarp, makeHaasSpatial } from "../graph.ts";
 import { midiToFreq } from "../timing.ts";
 import { flashRow } from "../../ui/flash.ts";
+import { roleRouting } from "./routing.ts";
 import type { AudioRefs } from "../../types.ts";
-
-function roleRouting(role: string): { trackKey: string; rowId: string } {
-  return role === "rhodesMel"
-    ? { trackKey: "melody", rowId: "mx-melody" }
-    : { trackKey: "comp", rowId: "mx-comp" };
-}
 
 export function playBell(
   audio: AudioRefs,

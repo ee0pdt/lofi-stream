@@ -1,13 +1,8 @@
 import { applyWarp, makeHaasSpatial } from "../graph.ts";
 import { beatDur, midiToFreq } from "../timing.ts";
 import { flashRow } from "../../ui/flash.ts";
+import { roleRouting } from "./routing.ts";
 import type { AudioRefs } from "../../types.ts";
-
-function roleRouting(role: string): { trackKey: string; rowId: string } {
-  return role === "rhodesMel"
-    ? { trackKey: "melody", rowId: "mx-melody" }
-    : { trackKey: "comp", rowId: "mx-comp" };
-}
 
 export function playColdsynth(
   audio: AudioRefs,
@@ -27,7 +22,7 @@ export function playColdsynth(
     [f, 1.0],
     [f * 1.003, 0.8],
     [f * 0.997, 0.8],
-  ].forEach(([freq], idx) => {
+  ].forEach(([freq, amp], idx) => {
     if (idx === 0) flashRow(audio.actx, rowId, time, 300);
     const o = audio.actx.createOscillator();
     const g = audio.actx.createGain();
@@ -36,8 +31,8 @@ export function playColdsynth(
     o.frequency.value = freq;
     applyWarp(audio, o);
     g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(vel, time + 0.05);
-    g.gain.setValueAtTime(vel, time + dur);
+    g.gain.linearRampToValueAtTime(vel * amp, time + 0.05);
+    g.gain.setValueAtTime(vel * amp, time + dur);
     g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.8);
     filt.type = "lowpass";
     filt.frequency.value = 1600;
