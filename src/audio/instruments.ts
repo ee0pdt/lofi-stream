@@ -1,8 +1,8 @@
 /**
- * Voicing/timbre synths plus drum hits. Each `play*` function builds a
- * one-shot voice for a specific midi/time/duration. Long-lived noise
- * (tape hiss, vinyl scratches) and short-lived percussion (kick/snare/hat)
- * also live here — they're all "things that schedule audio events".
+ * Voicing/timbre synths, drum hits, and ambient sounds. Each `play*` function
+ * builds a one-shot voice for a specific midi/time/duration. Long-lived noise
+ * (tape hiss, vinyl scratches) is also managed here — all are
+ * "things that schedule audio events".
  *
  * Comp/melody timbre choice is per-mood (see `MOOD_META.compTimbre`),
  * so `playComp`/`playMelody` accept the current mood and dispatch
@@ -17,20 +17,7 @@ import type { Store } from "../store.ts";
 import { midiToFreq } from "./timing.ts";
 import { flashRow } from "../ui/flash.ts";
 
-export { beatDur, midiToFreq, swungTime } from "./timing.ts";
-export { flashRow };
-
-export { playKick } from "./timbres/kick.ts";
-export { playSnare } from "./timbres/snare.ts";
-export { playHat } from "./timbres/hat.ts";
-export { playRhodes } from "./timbres/rhodes.ts";
-export { playVibraphone } from "./timbres/vibraphone.ts";
-export { playGuitar } from "./timbres/guitar.ts";
-export { playPad } from "./timbres/pad.ts";
-export { playCelesta } from "./timbres/celesta.ts";
-export { playBell } from "./timbres/bell.ts";
-export { playColdsynth } from "./timbres/coldsynth.ts";
-
+// Harmonic timbres used by playComp/playMelody
 import { playRhodes } from "./timbres/rhodes.ts";
 import { playVibraphone } from "./timbres/vibraphone.ts";
 import { playGuitar } from "./timbres/guitar.ts";
@@ -38,6 +25,14 @@ import { playPad } from "./timbres/pad.ts";
 import { playCelesta } from "./timbres/celesta.ts";
 import { playBell } from "./timbres/bell.ts";
 import { playColdsynth } from "./timbres/coldsynth.ts";
+
+export { beatDur, midiToFreq, swungTime } from "./timing.ts";
+export { flashRow };
+
+export { playKick } from "./timbres/kick.ts";
+export { playSnare } from "./timbres/snare.ts";
+export { playHat } from "./timbres/hat.ts";
+export { playBell, playCelesta, playColdsynth, playGuitar, playPad, playRhodes, playVibraphone };
 
 export function playComp(
   audio: AudioRefs,
