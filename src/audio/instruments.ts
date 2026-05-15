@@ -323,8 +323,8 @@ export function playColdsynth(
     applyWarp(audio, o);
     g.gain.setValueAtTime(0, time);
     g.gain.linearRampToValueAtTime(vel, time + 0.05);
-    g.gain.setValueAtTime(vel, time + dur * 0.6);
-    g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.3);
+    g.gain.setValueAtTime(vel, time + dur);
+    g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.8);
     filt.type = "lowpass";
     filt.frequency.value = 1600;
     filt.Q.value = 0.6;
@@ -332,7 +332,7 @@ export function playColdsynth(
     filt.connect(g);
     g.connect(sp.input);
     o.start(time);
-    o.stop(time + dur + bd * 0.4);
+    o.stop(time + dur + bd * 0.9);
   });
 }
 

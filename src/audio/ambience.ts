@@ -86,9 +86,9 @@ function buildAmbienceForMood(audio: AudioRefs, mood: Mood): void {
     const moveFilt = audio.actx.createBiquadFilter();
     moveFilt.type = "bandpass";
     moveFilt.frequency.value = 600;
-    moveFilt.Q.value = 0.4;
+    moveFilt.Q.value = 1.8;
     const moveGain = audio.actx.createGain();
-    moveGain.gain.value = 0.10;
+    moveGain.gain.value = 0.07;
     const movePan = audio.actx.createStereoPanner();
     movePan.pan.value = 0.1;
     // LFO: 0.03 Hz sine, ±200 Hz sweep around 600 Hz.
