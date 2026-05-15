@@ -10,294 +10,34 @@
  */
 
 import { MOOD_META } from "../music/moods.ts";
-import { applyWarp, buildIR, makeHaasSpatial, makeSpatial, noiseBuffer } from "./graph.ts";
+import { applyWarp, makeSpatial, noiseBuffer } from "./graph.ts";
 import { randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
-import { beatDur, midiToFreq } from "./timing.ts";
+import { midiToFreq } from "./timing.ts";
 import { flashRow } from "../ui/flash.ts";
 
 export { beatDur, midiToFreq, swungTime } from "./timing.ts";
 export { flashRow };
 
-let cachedCelestaIR: AudioBuffer | null = null;
+export { playKick } from "./timbres/kick.ts";
+export { playSnare } from "./timbres/snare.ts";
+export { playHat } from "./timbres/hat.ts";
+export { playRhodes } from "./timbres/rhodes.ts";
+export { playVibraphone } from "./timbres/vibraphone.ts";
+export { playGuitar } from "./timbres/guitar.ts";
+export { playPad } from "./timbres/pad.ts";
+export { playCelesta } from "./timbres/celesta.ts";
+export { playBell } from "./timbres/bell.ts";
+export { playColdsynth } from "./timbres/coldsynth.ts";
 
-function roleRouting(role: string): { trackKey: string; rowId: string } {
-  return role === "rhodesMel"
-    ? { trackKey: "melody", rowId: "mx-melody" }
-    : { trackKey: "comp", rowId: "mx-comp" };
-}
-
-export function playRhodes(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.16,
-  role = "rhodesComp",
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const partials: ReadonlyArray<readonly [number, OscillatorType]> = [
-    [midiToFreq(midi), "sine"],
-    [midiToFreq(midi) * 1.004, "sine"],
-    [midiToFreq(midi) * 0.997, "triangle"],
-  ];
-  partials.forEach(([f, type], i) => {
-    if (i === 0) flashRow(audio.actx, rowId, time, 120);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const filt = audio.actx.createBiquadFilter();
-    o.type = type;
-    o.frequency.value = f;
-    applyWarp(audio, o);
-    const v = vel * (i === 2 ? 0.3 : 1);
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(v, time + 0.008);
-    g.gain.exponentialRampToValueAtTime(v * 0.55, time + 0.06);
-    g.gain.setValueAtTime(v * 0.55, time + dur * 0.5);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 0.95);
-    filt.type = "lowpass";
-    filt.frequency.setValueAtTime(1800, time);
-    filt.frequency.exponentialRampToValueAtTime(700, time + dur * 0.7);
-    filt.Q.value = 0.8;
-    o.connect(filt);
-    filt.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + dur + 0.05);
-  });
-}
-
-export function playVibraphone(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.14,
-  role = "rhodesComp",
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi);
-  [
-    [f, 0.9],
-    [f * 2, 0.12],
-  ].forEach(([freq, relVel], idx) => {
-    if (idx === 0) flashRow(audio.actx, rowId, time, 120);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
-    const v = vel * relVel;
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(v, time + 0.005);
-    g.gain.exponentialRampToValueAtTime(v * 0.3, time + 0.12);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + dur * 1.4);
-    o.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + dur * 1.5);
-  });
-}
-
-export function playGuitar(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.18,
-  role = "rhodesComp",
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi);
-  [
-    [f, 1],
-    [f * 2, 0.4],
-    [f * 3, 0.18],
-    [f * 4, 0.08],
-  ].forEach(([freq, relVel], idx) => {
-    if (idx === 0) flashRow(audio.actx, rowId, time, 80);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const filt = audio.actx.createBiquadFilter();
-    o.type = idx < 2 ? "sawtooth" : "sine";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
-    const v = vel * relVel;
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(v, time + 0.003);
-    g.gain.exponentialRampToValueAtTime(v * 0.08, time + 0.09);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + Math.min(dur, 0.6));
-    filt.type = "lowpass";
-    filt.frequency.setValueAtTime(5000, time);
-    filt.frequency.exponentialRampToValueAtTime(800, time + 0.08);
-    filt.Q.value = 0.5;
-    o.connect(filt);
-    filt.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + Math.min(dur, 0.65));
-  });
-}
-
-export function playPad(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.1,
-  role = "rhodesComp",
-  bpm = 80,
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi);
-  const bd = beatDur(bpm);
-  [
-    [f, 1],
-    [f * 1.002, 0.7],
-    [f * 0.998, 0.7],
-  ].forEach(([freq], idx) => {
-    if (idx === 0) flashRow(audio.actx, rowId, time, 300);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const filt = audio.actx.createBiquadFilter();
-    o.type = "sine";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(vel, time + bd * 0.8);
-    g.gain.setValueAtTime(vel, time + dur * 0.6);
-    g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.5);
-    filt.type = "lowpass";
-    filt.frequency.value = 900;
-    filt.Q.value = 0.4;
-    o.connect(filt);
-    filt.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + dur + bd * 0.6);
-  });
-}
-
-export function playCelesta(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.1,
-  role = "rhodesComp",
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  flashRow(audio.actx, rowId, time, 90);
-  const f = midiToFreq(midi + 12);
-  const o = audio.actx.createOscillator();
-  const g = audio.actx.createGain();
-  o.type = "sine";
-  o.frequency.value = f;
-  applyWarp(audio, o);
-  g.gain.setValueAtTime(0, time);
-  g.gain.linearRampToValueAtTime(vel * 0.6, time + 0.004);
-  g.gain.exponentialRampToValueAtTime(vel * 0.08, time + 0.2);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + Math.min(dur * 0.9, 1.2));
-  if (cachedCelestaIR === null) cachedCelestaIR = buildIR(audio, 1.5, 0.6);
-  const reverb2 = audio.actx.createConvolver();
-  reverb2.buffer = cachedCelestaIR;
-  const rv = audio.actx.createGain();
-  rv.gain.value = 0.5;
-  const sp = makeHaasSpatial(audio, role);
-  o.connect(g);
-  g.connect(sp.input);
-  sp.output.connect(audio.trackGains[trackKey]);
-  g.connect(rv);
-  rv.connect(reverb2);
-  reverb2.connect(audio.trackGains[trackKey]);
-  o.start(time);
-  o.stop(time + Math.min(dur, 1.3));
-}
-
-export function playBell(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.1,
-  role = "rhodesComp",
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi + 12);
-  const harmonics: [number, number][] = [
-    [f, 1.0],
-    [f * 2, 0.35],
-    [f * 3, 0.12],
-  ];
-  harmonics.forEach(([freq, amp], idx) => {
-    if (idx === 0) flashRow(audio.actx, rowId, time, 120);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
-    const decayTime = Math.max(0.4, Math.min(dur * 0.85, 2.5)) * (1 - idx * 0.2);
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(vel * amp, time + 0.001);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + decayTime);
-    o.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + decayTime + 0.05);
-  });
-}
-
-export function playColdsynth(
-  audio: AudioRefs,
-  midi: number,
-  time: number,
-  dur: number,
-  vel = 0.1,
-  role = "rhodesComp",
-  bpm = 80,
-): void {
-  const { trackKey, rowId } = roleRouting(role);
-  const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
-  const f = midiToFreq(midi);
-  const bd = beatDur(bpm);
-  [
-    [f, 1.0],
-    [f * 1.003, 0.8],
-    [f * 0.997, 0.8],
-  ].forEach(([freq], idx) => {
-    if (idx === 0) flashRow(audio.actx, rowId, time, 300);
-    const o = audio.actx.createOscillator();
-    const g = audio.actx.createGain();
-    const filt = audio.actx.createBiquadFilter();
-    o.type = "sawtooth";
-    o.frequency.value = freq;
-    applyWarp(audio, o);
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(vel, time + 0.05);
-    g.gain.setValueAtTime(vel, time + dur);
-    g.gain.linearRampToValueAtTime(0, time + dur + bd * 0.8);
-    filt.type = "lowpass";
-    filt.frequency.value = 1600;
-    filt.Q.value = 0.6;
-    o.connect(filt);
-    filt.connect(g);
-    g.connect(sp.input);
-    o.start(time);
-    o.stop(time + dur + bd * 0.9);
-  });
-}
+import { playRhodes } from "./timbres/rhodes.ts";
+import { playVibraphone } from "./timbres/vibraphone.ts";
+import { playGuitar } from "./timbres/guitar.ts";
+import { playPad } from "./timbres/pad.ts";
+import { playCelesta } from "./timbres/celesta.ts";
+import { playBell } from "./timbres/bell.ts";
+import { playColdsynth } from "./timbres/coldsynth.ts";
 
 export function playComp(
   audio: AudioRefs,
@@ -370,86 +110,6 @@ export function playBass(
   o2.start(time);
   o.stop(time + dur + 0.05);
   o2.stop(time + dur + 0.05);
-}
-
-export function playKick(audio: AudioRefs, time: number, mood: Mood): void {
-  flashRow(audio.actx, "mx-drums", time, 120);
-  const vel = mood === "sleepy" ? 0.38 : 0.55;
-  const o = audio.actx.createOscillator();
-  const g = audio.actx.createGain();
-  o.type = "sine";
-  o.frequency.setValueAtTime(180, time);
-  o.frequency.exponentialRampToValueAtTime(38, time + 0.18);
-  g.gain.setValueAtTime(vel, time);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + 0.28);
-  const sp = makeSpatial(audio, "kick");
-  o.connect(g);
-  g.connect(sp.input);
-  sp.output.connect(audio.trackGains.drums);
-  o.start(time);
-  o.stop(time + 0.3);
-  const b = noiseBuffer(audio.actx, 0.008);
-  const src = audio.actx.createBufferSource();
-  src.buffer = b;
-  const cg = audio.actx.createGain();
-  cg.gain.value = 0.1;
-  src.connect(cg);
-  cg.connect(sp.input);
-  src.start(time);
-}
-
-export function playSnare(
-  audio: AudioRefs,
-  time: number,
-  mood: Mood,
-  ghost = false,
-): void {
-  if (!ghost) flashRow(audio.actx, "mx-drums", time, 80);
-  const m = MOOD_META[mood];
-  const vol = ghost ? 0.04 : mood === "sleepy" ? 0.09 : 0.15;
-  const b = noiseBuffer(audio.actx, 0.18);
-  const src = audio.actx.createBufferSource();
-  src.buffer = b;
-  const filt = audio.actx.createBiquadFilter();
-  filt.type = "bandpass";
-  filt.frequency.value = m.snareFreq;
-  filt.Q.value = m.snareQ;
-  const g = audio.actx.createGain();
-  g.gain.setValueAtTime(vol, time);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
-  const sp = makeSpatial(audio, "snare");
-  src.connect(filt);
-  filt.connect(g);
-  g.connect(sp.input);
-  sp.output.connect(audio.trackGains.drums);
-  src.start(time);
-}
-
-export function playHat(
-  audio: AudioRefs,
-  time: number,
-  mood: Mood,
-  open = false,
-  vol = 0.06,
-): void {
-  flashRow(audio.actx, "mx-drums", time, 40);
-  const moodVol = { rainy: 1, late: 0.9, cafe: 0.7, sleepy: 0.5, transit: 0.6 }[mood] ?? 1;
-  const len = open ? 0.22 : 0.04;
-  const b = noiseBuffer(audio.actx, len);
-  const src = audio.actx.createBufferSource();
-  src.buffer = b;
-  const filt = audio.actx.createBiquadFilter();
-  filt.type = "highpass";
-  filt.frequency.value = mood === "cafe" ? 11000 : 9000;
-  const g = audio.actx.createGain();
-  g.gain.setValueAtTime(vol * moodVol, time);
-  g.gain.exponentialRampToValueAtTime(0.0001, time + len * 0.85);
-  const sp = makeSpatial(audio, "hat");
-  src.connect(filt);
-  filt.connect(g);
-  g.connect(sp.input);
-  sp.output.connect(audio.trackGains.drums);
-  src.start(time);
 }
 
 /**
