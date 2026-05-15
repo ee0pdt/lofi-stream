@@ -18,8 +18,13 @@ import {
   startScheduler,
   stopScheduler,
 } from "./audio/scheduler.ts";
-import { buildRainLayers, startAmbience, stopAmbience } from "./audio/ambience.ts";
-import { startScratches, startTapeHiss } from "./audio/instruments.ts";
+import {
+  buildRainLayers,
+  startAmbience,
+  startScratches,
+  startTapeHiss,
+  stopAmbience,
+} from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
 import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
 import { mountControls } from "./ui/controls.ts";
