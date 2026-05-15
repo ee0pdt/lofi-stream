@@ -1,7 +1,7 @@
 /**
  * The four moods the app supports today.
  */
-export type Mood = "rainy" | "late" | "cafe" | "sleepy";
+export type Mood = "rainy" | "late" | "cafe" | "sleepy" | "transit";
 
 /**
  * Comp/melody timbre choice — one of five pre-built instrument voices.
@@ -11,7 +11,7 @@ export type Timbre = "rhodes" | "vibraphone" | "guitar" | "pad" | "celesta";
 /**
  * Ambience layer choice per mood.
  */
-export type Ambience = "rain" | "traffic" | "room" | "wind";
+export type Ambience = "rain" | "traffic" | "room" | "wind" | "transit";
 
 /**
  * Jazz chord-quality recipes used by FORMS. Each maps to an array of semitone

@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert@^1";
 import { MOOD_META } from "../src/music/moods.ts";
 import type { Mood } from "../src/types.ts";
 
-const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy"];
+const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy", "transit"];
 
 Deno.test("MOOD_META: contains exactly the four expected moods", () => {
   assertEquals(Object.keys(MOOD_META).sort(), [...MOODS].sort());
@@ -63,7 +63,7 @@ Deno.test("MOOD_META: compTimbre and melTimbre are valid timbres", () => {
 });
 
 Deno.test("MOOD_META: ambience is a valid ambience type", () => {
-  const validAmbience = ["rain", "traffic", "room", "wind"];
+  const validAmbience = ["rain", "traffic", "room", "wind", "transit"];
   for (const mood of MOODS) {
     assertEquals(
       validAmbience.includes(MOOD_META[mood].ambience),
@@ -86,4 +86,13 @@ Deno.test("MOOD_META.sleepy: spot-check known values", () => {
   assertEquals(m.compTimbre, "pad");
   assertEquals(m.melTimbre, "celesta");
   assertEquals(m.ambience, "wind");
+});
+
+Deno.test("MOOD_META.transit: spot-check known values", () => {
+  const m = MOOD_META.transit;
+  assertEquals(m.bpmRange, [60, 70]);
+  assertEquals(m.compTimbre, "pad");
+  assertEquals(m.melTimbre, "celesta");
+  assertEquals(m.ambience, "transit");
+  assertEquals(m.names, ["platform 4", "last departure", "signal hold"]);
 });

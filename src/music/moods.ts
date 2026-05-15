@@ -62,4 +62,18 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     melTimbre: "celesta",
     ambience: "wind",
   },
+  transit: {
+    bpmRange: [60, 70],
+    swingRange: [0.08, 0.13],
+    names: ["platform 4", "last departure", "signal hold"],
+    key_pool: [0, 2, 3, 5, 8],
+    reverb: { dur: 4.5, decay: 0.38 },
+    snareFreq: 2000,
+    snareQ: 0.45,
+    bassFilter: 220,
+    bassAttack: 0.03,
+    compTimbre: "pad",
+    melTimbre: "celesta",
+    ambience: "transit",
+  },
 };
