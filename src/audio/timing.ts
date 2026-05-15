@@ -1,5 +1,5 @@
-export function midiToFreq(m: number): number {
-  return 440 * Math.pow(2, (m - 69) / 12);
+export function midiToFreq(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
 export function beatDur(bpm: number): number {
