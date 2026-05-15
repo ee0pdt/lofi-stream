@@ -6,7 +6,7 @@
  *
  * Sources for the running bed are tracked in `currentSources` so
  * `stopAmbience` can disconnect them on mood change. Tape hiss is NOT
- * tracked here — it lives in `instruments.ts` and persists across moods.
+ * tracked here — it lives in this module and persists across moods.
  */
 
 import { noiseBuffer } from "./graph.ts";

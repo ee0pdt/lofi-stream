@@ -24,7 +24,10 @@ import {
   SNARE_PAT,
 } from "../music/drum-patterns.ts";
 import { beatDur, swungTime } from "./timing.ts";
-import { playBass, playComp, playHat, playKick, playMelody, playSnare } from "./instruments.ts";
+import { playKick } from "./timbres/kick.ts";
+import { playSnare } from "./timbres/snare.ts";
+import { playHat } from "./timbres/hat.ts";
+import { playBass, playComp, playMelody } from "./voices.ts";
 import { applyMoodReverb } from "./graph.ts";
 import { pickFrom, randInt, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Form, Mood } from "../types.ts";
