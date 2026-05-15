@@ -44,6 +44,14 @@ const MOOD_PALETTE: Record<Mood, MoodPalette> = {
       [170, 35, 50],
     ],
   },
+  transit: {
+    base: "#1a0a2e",
+    blobs: [
+      [270, 60, 45],
+      [290, 50, 50],
+      [250, 45, 40],
+    ],
+  },
 };
 
 const NUM_BLOBS = 5;

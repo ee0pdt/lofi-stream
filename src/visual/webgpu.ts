@@ -47,6 +47,14 @@ const MOOD_GPU: Record<Mood, MoodGpu> = {
       [170, 35, 50, 0.3],
     ],
   },
+  transit: {
+    base: [0.1, 0.04, 0.18],
+    blobs: [
+      [270, 60, 45, 0.5],
+      [290, 50, 50, 0.42],
+      [250, 45, 40, 0.35],
+    ],
+  },
 };
 
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
