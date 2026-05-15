@@ -14,7 +14,7 @@ import { pickFrom, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
 
-let currentSources: AudioBufferSourceNode[] = [];
+let currentSources: (AudioBufferSourceNode | OscillatorNode)[] = [];
 
 function makeLoopedNoise(
   audio: AudioRefs,
@@ -75,6 +75,40 @@ function buildAmbienceForMood(audio: AudioRefs, mood: Mood): void {
   } else if (mood === "sleepy") {
     loopedNoise(audio, 120, "lowpass", 1.2, 0.28, 0.0, dest);
     loopedNoise(audio, 3000, "highpass", 0.5, 0.02, 0.0, dest);
+  } else if (mood === "transit") {
+    // Sub rumble — constant low-end presence
+    loopedNoise(audio, 90, "lowpass", 1.5, 0.20, 0.0, dest);
+    // Distant station hiss
+    loopedNoise(audio, 5000, "highpass", 0.8, 0.02, 0.0, dest);
+
+    // Mid movement layer with slow LFO filter sweep
+    const moveSrc = audio.actx.createBufferSource();
+    moveSrc.buffer = noiseBuffer(audio.actx, 4, true);
+    moveSrc.loop = true;
+    const moveFilt = audio.actx.createBiquadFilter();
+    moveFilt.type = "bandpass";
+    moveFilt.frequency.value = 600;
+    moveFilt.Q.value = 0.4;
+    const moveGain = audio.actx.createGain();
+    moveGain.gain.value = 0.10;
+    const movePan = audio.actx.createStereoPanner();
+    movePan.pan.value = 0.1;
+    // LFO: 0.03 Hz sine, ±200 Hz sweep around 600 Hz
+    const lfo = audio.actx.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 0.03;
+    const lfoGain = audio.actx.createGain();
+    lfoGain.gain.value = 200;
+    lfo.connect(lfoGain);
+    lfoGain.connect(moveFilt.frequency);
+    lfo.start();
+    moveSrc.connect(moveFilt);
+    moveFilt.connect(moveGain);
+    moveGain.connect(movePan);
+    movePan.connect(dest);
+    moveSrc.start();
+    currentSources.push(moveSrc);
+    currentSources.push(lfo);
   }
 }
 
@@ -142,6 +176,118 @@ function scheduleClink(audio: AudioRefs, store: Store<AppState>): void {
   }, delay);
 }
 
+function scheduleTransitSweep(audio: AudioRefs, store: Store<AppState>): void {
+  if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+  const delay = randRange(25000, 55000);
+  setTimeout(() => {
+    if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+    const now = audio.actx.currentTime;
+    const dur = randRange(5, 9);
+    const o = audio.actx.createOscillator();
+    const filt = audio.actx.createBiquadFilter();
+    const g = audio.actx.createGain();
+    const p = audio.actx.createStereoPanner();
+    o.type = "sawtooth";
+    o.frequency.value = randRange(60, 120);
+    filt.type = "lowpass";
+    filt.frequency.value = 300;
+    filt.Q.value = 2.0;
+    p.pan.value = randRange(-0.5, 0.5);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.08, now + 1);
+    g.gain.setValueAtTime(0.08, now + dur - 1.5);
+    g.gain.linearRampToValueAtTime(0, now + dur);
+    o.connect(filt);
+    filt.connect(g);
+    g.connect(p);
+    p.connect(audio.ambienceGain);
+    o.start(now);
+    o.stop(now + dur);
+    scheduleTransitSweep(audio, store);
+  }, delay);
+}
+
+function scheduleTransitStab(audio: AudioRefs, store: Store<AppState>): void {
+  if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+  const delay = randRange(15000, 35000);
+  setTimeout(() => {
+    if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+    const now = audio.actx.currentTime;
+    // Root from key_pool: offsets [0, 2, 3, 5, 8] relative to A2 (110 Hz)
+    const rootFreq = 110 * Math.pow(2, pickFrom([0, 2, 3, 5, 8]) / 12);
+    const detunes = [0, 8, -8];
+    detunes.forEach((detuneCents) => {
+      const o = audio.actx.createOscillator();
+      const g = audio.actx.createGain();
+      o.type = "sine";
+      o.frequency.value = rootFreq * Math.pow(2, detuneCents / 1200);
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.05, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      o.connect(g);
+      g.connect(audio.ambienceGain);
+      o.start(now);
+      o.stop(now + 0.45);
+    });
+    scheduleTransitStab(audio, store);
+  }, delay);
+}
+
+function scheduleTransitSwell(audio: AudioRefs, store: Store<AppState>): void {
+  if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+  const delay = randRange(40000, 80000);
+  setTimeout(() => {
+    if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+    const now = audio.actx.currentTime;
+    const totalDur = 4 + 3 + 4; // fade-in + hold + fade-out
+    [0, 6].forEach((detuneCents) => {
+      const o = audio.actx.createOscillator();
+      const filt = audio.actx.createBiquadFilter();
+      const g = audio.actx.createGain();
+      o.type = "sawtooth";
+      o.frequency.value = 110 * Math.pow(2, detuneCents / 1200);
+      filt.type = "lowpass";
+      filt.frequency.value = 400;
+      filt.Q.value = 1.0;
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.06, now + 4);
+      g.gain.setValueAtTime(0.06, now + 7);
+      g.gain.linearRampToValueAtTime(0, now + totalDur);
+      o.connect(filt);
+      filt.connect(g);
+      g.connect(audio.ambienceGain);
+      o.start(now);
+      o.stop(now + totalDur);
+    });
+    scheduleTransitSwell(audio, store);
+  }, delay);
+}
+
+function scheduleTransitPing(audio: AudioRefs, store: Store<AppState>): void {
+  if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+  const delay = randRange(20000, 45000);
+  setTimeout(() => {
+    if (store.get().currentMood !== "transit" || !store.get().isPlaying) return;
+    const now = audio.actx.currentTime;
+    const freq = randRange(2000, 4000);
+    const o = audio.actx.createOscillator();
+    const g = audio.actx.createGain();
+    const p = audio.actx.createStereoPanner();
+    o.type = "sine";
+    o.frequency.value = freq;
+    p.pan.value = randRange(-0.3, 0.3);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.04, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 2);
+    o.connect(g);
+    g.connect(p);
+    p.connect(audio.ambienceGain);
+    o.start(now);
+    o.stop(now + 2.1);
+    scheduleTransitPing(audio, store);
+  }, delay);
+}
+
 /**
  * Build the three rain noise layers that route through `audio.rainGain`.
  * Always built — rainy mood pumps them via ambience; other moods leave
@@ -200,6 +346,12 @@ export function startAmbience(
     buildAmbienceForMood(audio, mood);
     if (mood === "late") scheduleSiren(audio, store);
     if (mood === "cafe") scheduleClink(audio, store);
+    if (mood === "transit") {
+      scheduleTransitSweep(audio, store);
+      scheduleTransitStab(audio, store);
+      scheduleTransitSwell(audio, store);
+      scheduleTransitPing(audio, store);
+    }
     audio.ambienceGain.gain.setTargetAtTime(1, audio.actx.currentTime, 1.0);
   }, 600);
 }
