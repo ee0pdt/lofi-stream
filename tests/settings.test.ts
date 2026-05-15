@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert@^1";
 import { DEFAULT_SETTINGS } from "../src/music/settings.ts";
 import type { Mood } from "../src/types.ts";
 
-const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy"];
+const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy", "transit"];
 
 const SLIDER_KEYS = [
   "drums",
@@ -20,7 +20,7 @@ const SLIDER_KEYS = [
   "vol",
 ] as const;
 
-Deno.test("DEFAULT_SETTINGS: contains exactly the four expected moods", () => {
+Deno.test("DEFAULT_SETTINGS: contains exactly the five expected moods", () => {
   assertEquals(Object.keys(DEFAULT_SETTINGS).sort(), [...MOODS].sort());
 });
 
@@ -52,4 +52,11 @@ Deno.test("DEFAULT_SETTINGS.cafe: rain is 0 (no rain in cafe)", () => {
 
 Deno.test("DEFAULT_SETTINGS.sleepy: rain is 0 (no rain when sleepy)", () => {
   assertEquals(DEFAULT_SETTINGS.sleepy.rain, 0);
+});
+
+Deno.test("DEFAULT_SETTINGS.transit: spot-check known values", () => {
+  const s = DEFAULT_SETTINGS.transit;
+  assertEquals(s.rain, 0);
+  assertEquals(s.ambience, 0.75);
+  assertEquals(s.complexity, 0.35);
 });
