@@ -185,3 +185,8 @@ const initialMood = store.get().currentMood;
 applyMoodUI(initialMood);
 setActiveMoodButton(initialMood);
 controls.applyMoodSettings(initialMood);
+
+// Minimal debug surface for e2e tests — not used by production code.
+(window as Window & { __lofi?: { actxState: () => string } }).__lofi = {
+  actxState: () => audio?.actx.state ?? "not-created",
+};
