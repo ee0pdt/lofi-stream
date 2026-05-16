@@ -39,7 +39,8 @@ export function setupMediaSession(
   // On iOS, a phone call or notification suspends the AudioContext.
   // Resume automatically when the interruption ends.
   audio.actx.addEventListener("statechange", () => {
-    if (audio.actx.state === "suspended" && store.get().isPlaying) {
+    const s = audio.actx.state;
+    if ((s === "suspended" || s === "interrupted") && store.get().isPlaying) {
       audio.actx.resume().catch(() => {});
     }
   });
