@@ -28,7 +28,7 @@ import {
 } from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
 import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
-import { mountControls } from "./ui/controls.ts";
+import { initKnobDrag, mountControls, updateKnobSvg } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
 import { applyMoodUI, mountMoodUI, setActiveMoodButton } from "./ui/mood-ui.ts";
 import { mountPlayButton, setPlayIcon, setStatusPlaying } from "./ui/play-button.ts";
@@ -200,7 +200,12 @@ if (skipBtn) {
 
 const bpmSlider = document.getElementById("bpmSlider");
 if (bpmSlider instanceof HTMLInputElement) {
-  bpmSlider.addEventListener("input", () => setCurrentBPM(parseInt(bpmSlider.value)));
+  initKnobDrag(bpmSlider);
+  updateKnobSvg(bpmSlider);
+  bpmSlider.addEventListener("input", () => {
+    updateKnobSvg(bpmSlider);
+    setCurrentBPM(parseInt(bpmSlider.value));
+  });
 }
 
 const keyChip = document.getElementById("keyChip");

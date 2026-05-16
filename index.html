@@ -342,7 +342,46 @@
         font-family: monospace;
       }
 
-      /* ── Shared range style ── */
+      /* ── Volume slider (only range input remaining) ── */
+      #volSlider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 2px;
+        outline: none;
+        cursor: pointer;
+      }
+      #volSlider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--warm);
+        border: 2px solid rgba(0, 0, 0, 0.4);
+        cursor: pointer;
+        transition:
+          transform 0.06s ease,
+          background 0.06s ease,
+          box-shadow 0.06s ease;
+      }
+      #volSlider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--warm);
+        border: 2px solid rgba(0, 0, 0, 0.4);
+        transition:
+          transform 0.06s ease,
+          background 0.06s ease,
+          box-shadow 0.06s ease;
+      }
+
+      .mx-div {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 0 10px;
+      }
 
       /* ── Mixer drawer ── */
       .mixer-toggle {
@@ -389,85 +428,88 @@
         display: block;
       }
 
-      .mx-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 9px;
-        min-height: 34px;
-        border-radius: 4px;
+      /* ── Knob grid ── */
+      .kn-grid {
+        --kn-size: 52px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px 8px;
+        padding: 12px 0 8px;
       }
-      .mx-lbl {
+      .kn-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .kn-wrap {
+        position: relative;
+        width: var(--kn-size);
+        height: var(--kn-size);
+        border-radius: 50%;
+        touch-action: none;
+      }
+      .kn-wrap:focus-within {
+        outline: 2px solid var(--warm);
+        outline-offset: 3px;
+      }
+      .kn-svg {
+        width: var(--kn-size);
+        height: var(--kn-size);
+        display: block;
+        pointer-events: none;
+      }
+      .kn-body {
+        fill: #1a1d24;
+      }
+      .kn-track {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .kn-fill {
+        fill: none;
+        stroke: var(--warm);
+        stroke-width: 3;
+        stroke-linecap: round;
+        transition: stroke 0.06s ease;
+      }
+      .kn-dot {
+        fill: var(--warm);
+        transition: fill 0.06s ease;
+      }
+      .kn-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        margin: 0;
+        -webkit-appearance: none;
+        border-radius: 50%;
+      }
+      .kn-lbl {
         font-size: 0.58rem;
         color: var(--dim);
-        width: 64px;
-        flex-shrink: 0;
         letter-spacing: 0.04em;
+        text-align: center;
       }
-
-      /* Thumb flash — the range input's knob pops when the instrument plays */
-      .mx-row input[type="range"].flash::-webkit-slider-thumb {
-        background: #fff;
-        box-shadow:
-          0 0 6px var(--warm),
-          0 0 2px #fff;
-        transform: scale(1.35);
-      }
-      .mx-row input[type="range"].flash::-moz-range-thumb {
-        background: #fff;
-        box-shadow:
-          0 0 6px var(--warm),
-          0 0 2px #fff;
-        transform: scale(1.35);
-      }
-      input[type="range"] {
-        -webkit-appearance: none;
-        width: 100%;
-        height: 3px;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 2px;
-        outline: none;
-        cursor: pointer;
-      }
-      input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: var(--warm);
-        border: 2px solid rgba(0, 0, 0, 0.4);
-        cursor: pointer;
-        transition:
-          transform 0.06s ease,
-          background 0.06s ease,
-          box-shadow 0.06s ease;
-      }
-      input[type="range"]::-moz-range-thumb {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: var(--warm);
-        border: 2px solid rgba(0, 0, 0, 0.4);
-        transition:
-          transform 0.06s ease,
-          background 0.06s ease,
-          box-shadow 0.06s ease;
-      }
-      .mx-row input[type="range"] {
-        flex: 1;
-      }
-      .mx-val {
+      .kn-val {
         font-size: 0.58rem;
         color: var(--dimmer);
-        width: 26px;
-        text-align: right;
-        flex-shrink: 0;
         font-variant-numeric: tabular-nums;
+        text-align: center;
       }
-      .mx-div {
-        height: 1px;
-        background: var(--border);
-        margin: 4px 0 10px;
+      /* Flash: brighten fill arc + dot when instrument plays */
+      .kn-cell.flash .kn-fill {
+        stroke: #fff;
+        filter: drop-shadow(0 0 4px var(--warm));
+      }
+      .kn-cell.flash .kn-dot {
+        fill: #fff;
+        filter: drop-shadow(0 0 4px var(--warm));
       }
 
       /* iOS "Add to Home Screen" banner — shown only in Safari before install */
@@ -595,165 +637,205 @@
         </svg>
       </button>
       <div class="mixer-panel" id="mixerPanel">
-        <div class="mx-row" id="mx-drums">
-          <span class="mx-lbl">drums</span>
-          <input
-            type="range"
-            data-track="drums"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.9"
-          />
-          <span class="mx-val" id="val-drums">90</span>
-        </div>
-        <div class="mx-row" id="mx-bass">
-          <span class="mx-lbl">bass</span>
-          <input
-            type="range"
-            data-track="bass"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.85"
-          />
-          <span class="mx-val" id="val-bass">85</span>
-        </div>
-        <div class="mx-row" id="mx-comp">
-          <span class="mx-lbl">piano</span>
-          <input
-            type="range"
-            data-track="comp"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.8"
-          />
-          <span class="mx-val" id="val-comp">80</span>
-        </div>
-        <div class="mx-row" id="mx-melody">
-          <span class="mx-lbl">melody</span>
-          <input
-            type="range"
-            data-track="melody"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.75"
-          />
-          <span class="mx-val" id="val-melody">75</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">hiss</span>
-          <input
-            type="range"
-            data-track="hiss"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.5"
-          />
-          <span class="mx-val" id="val-hiss">50</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">scratch</span>
-          <input
-            type="range"
-            data-track="scratches"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.7"
-          />
-          <span class="mx-val" id="val-scratches">70</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">hum</span>
-          <input
-            type="range"
-            data-track="hum"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.4"
-          />
-          <span class="mx-val" id="val-hum">40</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">warp</span>
-          <input
-            type="range"
-            id="warpSlider"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.3"
-          />
-          <span class="mx-val" id="val-warp">30</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">ambience</span>
-          <input
-            type="range"
-            data-track="ambience"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.6"
-          />
-          <span class="mx-val" id="val-ambience">60</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">rain</span>
-          <input
-            type="range"
-            id="rainSlider"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.4"
-          />
-          <span class="mx-val" id="val-rain">40</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">reverb</span>
-          <input
-            type="range"
-            id="reverbSlider"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.3"
-          />
-          <span class="mx-val" id="val-reverb">30</span>
+        <div class="kn-grid">
+          <div class="kn-cell" id="mx-drums">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="drums"
+                aria-label="drums" min="0" max="1" step="0.01" value="0.9"/>
+            </div>
+            <span class="kn-lbl">drums</span>
+            <span class="kn-val" id="val-drums">90</span>
+          </div>
+
+          <div class="kn-cell" id="mx-bass">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="bass"
+                aria-label="bass" min="0" max="1" step="0.01" value="0.85"/>
+            </div>
+            <span class="kn-lbl">bass</span>
+            <span class="kn-val" id="val-bass">85</span>
+          </div>
+
+          <div class="kn-cell" id="mx-comp">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="comp"
+                aria-label="piano" min="0" max="1" step="0.01" value="0.8"/>
+            </div>
+            <span class="kn-lbl">piano</span>
+            <span class="kn-val" id="val-comp">80</span>
+          </div>
+
+          <div class="kn-cell" id="mx-melody">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="melody"
+                aria-label="melody" min="0" max="1" step="0.01" value="0.75"/>
+            </div>
+            <span class="kn-lbl">melody</span>
+            <span class="kn-val" id="val-melody">75</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="hiss"
+                aria-label="hiss" min="0" max="1" step="0.01" value="0.5"/>
+            </div>
+            <span class="kn-lbl">hiss</span>
+            <span class="kn-val" id="val-hiss">50</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="scratches"
+                aria-label="scratch" min="0" max="1" step="0.01" value="0.7"/>
+            </div>
+            <span class="kn-lbl">scratch</span>
+            <span class="kn-val" id="val-scratches">70</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="hum"
+                aria-label="hum" min="0" max="1" step="0.01" value="0.4"/>
+            </div>
+            <span class="kn-lbl">hum</span>
+            <span class="kn-val" id="val-hum">40</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="ambience"
+                aria-label="ambience" min="0" max="1" step="0.01" value="0.6"/>
+            </div>
+            <span class="kn-lbl">ambience</span>
+            <span class="kn-val" id="val-ambience">60</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" id="warpSlider"
+                aria-label="warp" min="0" max="1" step="0.01" value="0.3"/>
+            </div>
+            <span class="kn-lbl">warp</span>
+            <span class="kn-val" id="val-warp">30</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" id="rainSlider"
+                aria-label="rain" min="0" max="1" step="0.01" value="0.4"/>
+            </div>
+            <span class="kn-lbl">rain</span>
+            <span class="kn-val" id="val-rain">40</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" id="reverbSlider"
+                aria-label="reverb" min="0" max="1" step="0.01" value="0.3"/>
+            </div>
+            <span class="kn-lbl">reverb</span>
+            <span class="kn-val" id="val-reverb">30</span>
+          </div>
+
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" id="complexitySlider"
+                aria-label="complexity" min="0" max="1" step="0.01" value="0.5"/>
+            </div>
+            <span class="kn-lbl">complexity</span>
+            <span class="kn-val" id="val-complexity">50</span>
+          </div>
         </div>
 
         <div class="mx-div"></div>
 
-        <div class="mx-row">
-          <span class="mx-lbl">tempo</span>
-          <input
-            type="range"
-            id="bpmSlider"
-            min="45"
-            max="95"
-            step="1"
-            value="68"
-            style="flex: 1"
-          />
-          <span class="mx-val" id="bpmVal">&mdash;</span>
-        </div>
-        <div class="mx-row">
-          <span class="mx-lbl">complexity</span>
-          <input
-            type="range"
-            id="complexitySlider"
-            min="0"
-            max="1"
-            step="0.01"
-            value="0.5"
-          />
-          <span class="mx-val" id="val-complexity">50</span>
+        <div class="kn-grid">
+          <div class="kn-cell">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" id="bpmSlider"
+                aria-label="tempo" min="45" max="95" step="1" value="68"/>
+            </div>
+            <span class="kn-lbl">tempo</span>
+            <span class="kn-val" id="bpmVal">&mdash;</span>
+          </div>
         </div>
       </div>
     </div>
