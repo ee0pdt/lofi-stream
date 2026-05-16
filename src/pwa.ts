@@ -56,8 +56,11 @@ export function setupMediaSession(
   gain.connect(audio.actx.destination);
   const streamDest = audio.actx.createMediaStreamDestination();
   gain.connect(streamDest);
+  // Append to DOM so the element isn't garbage collected when this function returns.
   const silentEl = document.createElement("audio");
   silentEl.srcObject = streamDest.stream;
+  silentEl.style.display = "none";
+  document.body.appendChild(silentEl);
   silentEl.play().catch(() => {});
   osc.start();
 }
