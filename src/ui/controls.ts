@@ -109,6 +109,10 @@ export function initKnobDrag(input: HTMLInputElement): void {
   input.addEventListener("pointerup", (e: PointerEvent) => {
     input.releasePointerCapture(e.pointerId);
   });
+
+  input.addEventListener("pointercancel", (e: PointerEvent) => {
+    input.releasePointerCapture(e.pointerId);
+  });
 }
 
 const TRACK_SLIDERS: Readonly<Record<keyof MoodSettings, string>> = {
