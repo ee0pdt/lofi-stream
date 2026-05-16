@@ -12,7 +12,7 @@
     "indentWidth": 2,
     "singleQuote": false,
     "lineWidth": 100,
-    "exclude": ["index.html", "CLAUDE.md", "docs/", "sw.js"]
+    "exclude": ["index.html", "CLAUDE.md", "docs/", "sw.js", "manifest.json"]
   },
   "lint": {
     "rules": {
