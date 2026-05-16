@@ -50,6 +50,12 @@ registerServiceWorker();
 maybeShowIOSBanner();
 (document.getElementById("versionTxt") as HTMLElement).textContent = VERSION;
 
+const tickEl = document.getElementById("tickTxt") as HTMLElement;
+let ticks = 0;
+setInterval(() => {
+  tickEl.textContent = `t:${++ticks}`;
+}, 1000);
+
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;
 mountBackground(
