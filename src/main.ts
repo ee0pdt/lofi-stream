@@ -38,6 +38,7 @@ import {
   setupMediaSession,
   updateMediaSessionMood,
 } from "./pwa.ts";
+import { VERSION } from "./version.ts";
 import type { AudioRefs, Mood } from "./types.ts";
 
 const store = createStore(initialAppState());
@@ -47,6 +48,7 @@ let mediaSessionReady = false;
 
 registerServiceWorker();
 maybeShowIOSBanner();
+(document.getElementById("versionTxt") as HTMLElement).textContent = VERSION;
 
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;

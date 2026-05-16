@@ -1,5 +1,11 @@
 import * as esbuild from "npm:esbuild@^0.24";
 
+const gitSha = new TextDecoder()
+  .decode(
+    (await new Deno.Command("git", { args: ["rev-parse", "--short", "HEAD"] }).output()).stdout,
+  )
+  .trim();
+
 const result = await esbuild.build({
   entryPoints: ["src/main.ts"],
   bundle: true,
@@ -8,6 +14,7 @@ const result = await esbuild.build({
   target: "es2022",
   sourcemap: "inline",
   logLevel: "info",
+  define: { __GIT_SHA__: JSON.stringify(gitSha) },
 });
 
 if (result.errors.length > 0) {
