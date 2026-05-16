@@ -272,6 +272,10 @@ function tick(audio: AudioRefs, store: Store<AppState>): void {
   timerHandle = setTimeout(() => tick(audio, store), TICK_MS);
 }
 
+export function isSchedulerRunning(): boolean {
+  return timerHandle != null;
+}
+
 export function startScheduler(audio: AudioRefs, store: Store<AppState>): void {
   if (timerHandle != null) return;
   newProgression(audio, store.get().currentMood, true);

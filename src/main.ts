@@ -12,6 +12,7 @@ import { initAudio, sliderToGain } from "./audio/graph.ts";
 import {
   cycleCurrentKey,
   flushScheduler,
+  isSchedulerRunning,
   newProgression,
   resetSchedulerTime,
   setCurrentBPM,
@@ -214,7 +215,10 @@ let prevActxState = "none";
 setInterval(() => {
   if (!audio) return;
   const cur = audio.actx.state;
-  if (prevActxState !== "running" && cur === "running" && store.get().isPlaying) {
+  if (
+    prevActxState !== "running" && cur === "running" && store.get().isPlaying &&
+    isSchedulerRunning()
+  ) {
     flushScheduler(audio, store);
   }
   prevActxState = cur;
