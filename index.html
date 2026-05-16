@@ -470,6 +470,91 @@
         margin: 4px 0 10px;
       }
 
+      /* ── Knob grid ── */
+      .kn-grid {
+        --kn-size: 52px;
+        --kn-drag-px: 200;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px 8px;
+        padding: 12px 0 8px;
+      }
+      .kn-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .kn-wrap {
+        position: relative;
+        width: var(--kn-size);
+        height: var(--kn-size);
+        border-radius: 50%;
+        touch-action: none;
+      }
+      .kn-wrap:focus-within {
+        outline: 2px solid var(--warm);
+        outline-offset: 3px;
+      }
+      .kn-svg {
+        width: var(--kn-size);
+        height: var(--kn-size);
+        display: block;
+        pointer-events: none;
+      }
+      .kn-body {
+        fill: #1a1d24;
+      }
+      .kn-track {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .kn-fill {
+        fill: none;
+        stroke: var(--warm);
+        stroke-width: 3;
+        stroke-linecap: round;
+        transition: stroke 0.06s ease;
+      }
+      .kn-dot {
+        fill: var(--warm);
+        transition: fill 0.06s ease;
+      }
+      .kn-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        margin: 0;
+        -webkit-appearance: none;
+        border-radius: 50%;
+      }
+      .kn-lbl {
+        font-size: 0.58rem;
+        color: var(--dim);
+        letter-spacing: 0.04em;
+        text-align: center;
+      }
+      .kn-val {
+        font-size: 0.58rem;
+        color: var(--dimmer);
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      /* Flash: brighten fill arc + dot when instrument plays */
+      .kn-cell.flash .kn-fill {
+        stroke: #fff;
+        filter: drop-shadow(0 0 4px var(--warm));
+      }
+      .kn-cell.flash .kn-dot {
+        fill: #fff;
+        filter: drop-shadow(0 0 4px var(--warm));
+      }
+
       /* iOS "Add to Home Screen" banner — shown only in Safari before install */
       #iosBanner {
         display: none;
