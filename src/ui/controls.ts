@@ -73,6 +73,44 @@ export function updateKnobSvg(input: HTMLInputElement): void {
   }
 }
 
+const DRAG_PX = 200; // px of upward drag = full range sweep
+
+/**
+ * Wires vertical pointer-drag on `input`'s parent `.kn-wrap` so that
+ * dragging up increases the value and dragging down decreases it.
+ * Dispatches a synthetic `input` event after each update so existing
+ * audio-graph listeners fire unchanged.
+ */
+export function initKnobDrag(input: HTMLInputElement): void {
+  let startY = 0;
+  let startVal = 0;
+
+  input.addEventListener("pointerdown", (e: PointerEvent) => {
+    e.preventDefault();
+    input.setPointerCapture(e.pointerId);
+    startY = e.clientY;
+    startVal = parseFloat(input.value);
+  });
+
+  input.addEventListener("pointermove", (e: PointerEvent) => {
+    if (!input.hasPointerCapture(e.pointerId)) return;
+    const min = parseFloat(input.min) || 0;
+    const max = parseFloat(input.max) || 1;
+    const range = max - min;
+    const delta = (startY - e.clientY) / DRAG_PX * range;
+    const newVal = Math.max(min, Math.min(max, startVal + delta));
+    const stepped = Math.round(newVal / parseFloat(input.step || "1")) *
+      parseFloat(input.step || "1");
+    input.value = String(stepped);
+    updateKnobSvg(input);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  input.addEventListener("pointerup", (e: PointerEvent) => {
+    input.releasePointerCapture(e.pointerId);
+  });
+}
+
 const TRACK_SLIDERS: Readonly<Record<keyof MoodSettings, string>> = {
   drums: 'input[data-track="drums"]',
   bass: 'input[data-track="bass"]',
