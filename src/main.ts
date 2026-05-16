@@ -53,7 +53,11 @@ maybeShowIOSBanner();
 const tickEl = document.getElementById("tickTxt") as HTMLElement;
 let ticks = 0;
 setInterval(() => {
-  tickEl.textContent = `t:${++ticks}`;
+  const state = audio?.actx.state ?? "none";
+  tickEl.textContent = `t:${++ticks} ${state}`;
+  if (state === "suspended" && store.get().isPlaying && audio) {
+    audio.actx.resume().catch(() => {});
+  }
 }, 1000);
 
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
