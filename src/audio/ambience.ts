@@ -445,7 +445,7 @@ export function playVinylScratch(
 
   setTimeout(
     () => playVinylScratch(audio, store),
-    randRange(10000, 28000),
+    randRange(4000, 12000),
   );
 }
 
