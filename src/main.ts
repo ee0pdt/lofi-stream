@@ -12,6 +12,7 @@ import { initAudio, sliderToGain } from "./audio/graph.ts";
 import {
   cycleCurrentKey,
   flushScheduler,
+  isSchedulerRunning,
   newProgression,
   resetSchedulerTime,
   setCurrentBPM,
@@ -38,6 +39,7 @@ import {
   setupMediaSession,
   updateMediaSessionMood,
 } from "./pwa.ts";
+import { VERSION } from "./version.ts";
 import type { AudioRefs, Mood } from "./types.ts";
 
 const store = createStore(initialAppState());
@@ -47,6 +49,7 @@ let mediaSessionReady = false;
 
 registerServiceWorker();
 maybeShowIOSBanner();
+(document.getElementById("versionTxt") as HTMLElement).textContent = VERSION;
 
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;
@@ -205,6 +208,22 @@ if (keyChip) keyChip.addEventListener("click", () => cycleCurrentKey());
 
 // Tab restore: resume the AudioContext (Safari suspends it when hidden)
 // and flush the scheduler so the 3-second buffer refills immediately.
+// iOS AudioContext can enter "interrupted" state (phone call, system audio event,
+// backgrounding). When it recovers to "running" the scheduler lookahead is stale,
+// so flush immediately to avoid silence until the next scheduler cycle.
+let prevActxState = "none";
+setInterval(() => {
+  if (!audio) return;
+  const cur = audio.actx.state;
+  if (
+    prevActxState !== "running" && cur === "running" && store.get().isPlaying &&
+    isSchedulerRunning()
+  ) {
+    flushScheduler(audio, store);
+  }
+  prevActxState = cur;
+}, 200);
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !store.get().isPlaying || !audio) return;
   if (audio.actx.state === "suspended") {

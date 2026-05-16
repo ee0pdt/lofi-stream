@@ -1,6 +1,12 @@
 import { serveDir } from "jsr:@std/http@^1/file-server";
 import * as esbuild from "npm:esbuild@^0.24";
 
+const gitSha = new TextDecoder()
+  .decode(
+    (await new Deno.Command("git", { args: ["rev-parse", "--short", "HEAD"] }).output()).stdout,
+  )
+  .trim();
+
 const RELOAD_PATH = "/__livereload";
 const RELOAD_CLIENT = `
 <script>
@@ -34,6 +40,7 @@ const ctx = await esbuild.context({
   target: "es2022",
   sourcemap: "inline",
   logLevel: "info",
+  define: { __GIT_SHA__: JSON.stringify(gitSha) },
   plugins: [
     {
       name: "livereload",
