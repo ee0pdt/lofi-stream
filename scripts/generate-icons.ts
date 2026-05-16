@@ -50,7 +50,9 @@ async function zlibCompress(data: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
   const reader = cs.readable.getReader();
-  await writer.write(data);
+  await writer.write(
+    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
+  );
   await writer.close();
   const chunks: Uint8Array[] = [];
   for (;;) {

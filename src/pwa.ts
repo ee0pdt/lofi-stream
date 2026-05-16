@@ -85,7 +85,7 @@ function isIOSSafari(): boolean {
 function isStandalone(): boolean {
   return (
     (navigator as Navigator & { standalone?: boolean }).standalone === true ||
-    window.matchMedia("(display-mode: standalone)").matches
+    globalThis.matchMedia("(display-mode: standalone)").matches
   );
 }
 
