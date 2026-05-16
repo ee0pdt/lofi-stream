@@ -365,13 +365,15 @@ export function startAmbience(
  * for teardown — hiss persists across mood changes.
  */
 export function startTapeHiss(audio: AudioRefs): void {
+  // Real vinyl hiss lives in the 8-14 kHz air band. Two decorrelated layers
+  // (L/R) per band give width without phase cancellation.
   for (
     const { freq, Q, gain } of [
-      { freq: 5500, Q: 0.6, gain: 0.09 },
-      { freq: 1800, Q: 0.4, gain: 0.035 },
+      { freq: 10000, Q: 0.7, gain: 0.045 },
+      { freq: 7000, Q: 0.5, gain: 0.022 },
     ]
   ) {
-    for (const panValue of [-0.9, 0.9]) {
+    for (const panValue of [-0.85, 0.85]) {
       const src = audio.actx.createBufferSource();
       src.buffer = noiseBuffer(audio.actx, 4, true);
       src.loop = true;
@@ -403,47 +405,47 @@ export function playVinylScratch(
 ): void {
   if (!store.get().isPlaying) return;
   const now = audio.actx.currentTime;
-  const numGrains = Math.floor(randRange(2, 5));
-  for (let i = 0; i < numGrains; i++) {
-    const offset = i * randRange(0.04, 0.09);
-    const grainDur = randRange(0.04, 0.1);
+
+  // A vinyl pop/tick: 1-3 brief click-like bursts spaced ~30-80 ms apart.
+  // Each burst is short (15-40 ms), bandpass-filtered around the 1-3 kHz
+  // presence band where real groove noise sits, with a sharp attack and
+  // fast exponential decay - no pitch sweep.
+  const numBursts = Math.floor(randRange(1, 4));
+  let cursor = 0;
+  for (let i = 0; i < numBursts; i++) {
+    const dur = randRange(0.015, 0.04);
     const src = audio.actx.createBufferSource();
-    src.buffer = noiseBuffer(audio.actx, 0.15);
-    src.playbackRate.setValueAtTime(randRange(0.6, 1.8), now + offset);
-    src.playbackRate.linearRampToValueAtTime(
-      randRange(0.4, 2.2),
-      now + offset + grainDur,
-    );
+    src.buffer = noiseBuffer(audio.actx, 0.1);
+
     const filt = audio.actx.createBiquadFilter();
     filt.type = "bandpass";
-    filt.frequency.setValueAtTime(randRange(800, 3000), now + offset);
-    filt.frequency.exponentialRampToValueAtTime(
-      randRange(400, 6000),
-      now + offset + grainDur,
-    );
-    filt.Q.value = randRange(1.5, 4);
+    filt.frequency.value = randRange(1200, 3000);
+    filt.Q.value = randRange(2, 5);
+
     const gainNode = audio.actx.createGain();
-    gainNode.gain.setValueAtTime(0, now + offset);
+    gainNode.gain.setValueAtTime(0, now + cursor);
     gainNode.gain.linearRampToValueAtTime(
-      randRange(0.06, 0.14),
-      now + offset + 0.005,
+      randRange(0.08, 0.18),
+      now + cursor + 0.003,
     );
-    gainNode.gain.exponentialRampToValueAtTime(
-      0.0001,
-      now + offset + grainDur,
-    );
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + cursor + dur);
+
     const panner = audio.actx.createStereoPanner();
-    panner.pan.value = randRange(-0.4, 0.4);
+    panner.pan.value = randRange(-0.5, 0.5);
+
     src.connect(filt);
     filt.connect(gainNode);
     gainNode.connect(panner);
     panner.connect(audio.trackGains.scratches);
-    src.start(now + offset);
-    src.stop(now + offset + grainDur + 0.02);
+    src.start(now + cursor);
+    src.stop(now + cursor + dur + 0.01);
+
+    cursor += dur + randRange(0.03, 0.08);
   }
+
   setTimeout(
     () => playVinylScratch(audio, store),
-    randRange(8000, 24000),
+    randRange(4000, 12000),
   );
 }
 
