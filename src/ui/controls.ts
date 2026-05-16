@@ -184,7 +184,10 @@ export function applyMoodSettings(
     const slider = document.querySelector(TRACK_SLIDERS[key]) as
       | HTMLInputElement
       | null;
-    if (slider) slider.value = String(val);
+    if (slider) {
+      slider.value = String(val);
+      updateKnobSvg(slider);
+    }
     const labelEl = document.getElementById(valLabelFor(key));
     if (labelEl) labelEl.textContent = String(Math.round(val * 100));
     dispatchSetting(ctx, moodSettings, key, val);
@@ -207,10 +210,12 @@ export function mountControls(ctx: ControlsContext): ControlsHandle {
     const slider = node as HTMLInputElement;
     const track = slider.dataset.track as keyof MoodSettings | undefined;
     if (!track) return;
+    initKnobDrag(slider);
     slider.addEventListener("input", () => {
       const val = parseFloat(slider.value);
       const label = document.getElementById(valLabelFor(track));
       if (label) label.textContent = String(Math.round(val * 100));
+      updateKnobSvg(slider);
       dispatchSetting(ctx, moodSettings, track, val);
     });
   });
@@ -220,11 +225,13 @@ export function mountControls(ctx: ControlsContext): ControlsHandle {
       | HTMLInputElement
       | null;
     if (!slider) continue;
+    if (key !== "vol") initKnobDrag(slider);
     slider.addEventListener("input", () => {
       const val = parseFloat(slider.value);
       if (key !== "vol") {
         const label = document.getElementById(valLabelFor(key));
         if (label) label.textContent = String(Math.round(val * 100));
+        updateKnobSvg(slider);
       }
       dispatchSetting(ctx, moodSettings, key, val);
     });
@@ -238,6 +245,10 @@ export function mountControls(ctx: ControlsContext): ControlsHandle {
       mixerPanel.classList.toggle("open");
     });
   }
+
+  document.querySelectorAll(".kn-input").forEach((node) => {
+    updateKnobSvg(node as HTMLInputElement);
+  });
 
   return {
     moodSettings,
