@@ -8,6 +8,12 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>lofi forever</title>
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#c97d40" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="lofi forever" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <style>
       @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Serif+Display:ital@0;1&display=swap");
 
@@ -457,9 +463,56 @@
         background: var(--border);
         margin: 4px 0 10px;
       }
+
+      /* iOS "Add to Home Screen" banner — shown only in Safari before install */
+      #iosBanner {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+        background: rgba(10, 13, 18, 0.97);
+        border-bottom: 1px solid var(--border);
+        align-items: center;
+        gap: 12px;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+      }
+      #iosBannerText {
+        flex: 1;
+        font-size: 0.72rem;
+        color: var(--text);
+        line-height: 1.5;
+      }
+      #iosBannerText strong {
+        color: var(--warm);
+      }
+      #iosBannerDismiss {
+        background: none;
+        border: none;
+        color: var(--dim);
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        line-height: 1;
+        font-family: inherit;
+        flex-shrink: 0;
+      }
     </style>
   </head>
   <body>
+    <!-- iOS install prompt (Safari only, pre-install) -->
+    <div id="iosBanner">
+      <span id="iosBannerText"
+        >For background audio: tap <strong>Share ↑</strong> &rarr;
+        <strong>Add to Home Screen</strong></span
+      >
+      <button id="iosBannerDismiss" aria-label="Dismiss">&times;</button>
+    </div>
+
     <!-- Generative background -->
 
     <canvas id="bg"></canvas>

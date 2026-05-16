@@ -3,6 +3,7 @@
     "check": "deno run --allow-read scripts/check-unicode.ts && deno fmt --check && deno lint --permit-no-files && deno check scripts/**/*.ts src/**/*.ts tests/**/*.ts",
     "build": "deno run -A scripts/build.ts",
     "dev": "deno run -A scripts/dev.ts",
+    "icons": "deno run -A scripts/generate-icons.ts",
     "test": "deno test -A",
     "fix": "deno fmt && deno lint --fix",
     "test:e2e": "python3 -m pytest e2e/ -v"
@@ -11,12 +12,13 @@
     "indentWidth": 2,
     "singleQuote": false,
     "lineWidth": 100,
-    "exclude": ["index.html", "CLAUDE.md", "docs/"]
+    "exclude": ["index.html", "CLAUDE.md", "docs/", "sw.js"]
   },
   "lint": {
     "rules": {
       "tags": ["recommended"]
-    }
+    },
+    "exclude": ["sw.js"]
   },
   "compilerOptions": {
     "strict": true,

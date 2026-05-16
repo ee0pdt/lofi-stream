@@ -31,11 +31,22 @@ import { mountControls } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
 import { applyMoodUI, mountMoodUI, setActiveMoodButton } from "./ui/mood-ui.ts";
 import { mountPlayButton, setPlayIcon, setStatusPlaying } from "./ui/play-button.ts";
+import {
+  maybeShowIOSBanner,
+  registerServiceWorker,
+  setMediaSessionPlaybackState,
+  setupMediaSession,
+  updateMediaSessionMood,
+} from "./pwa.ts";
 import type { AudioRefs, Mood } from "./types.ts";
 
 const store = createStore(initialAppState());
 let audio: AudioRefs | null = null;
 let moodChangeInProgress = false;
+let mediaSessionReady = false;
+
+registerServiceWorker();
+maybeShowIOSBanner();
 
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;
@@ -61,6 +72,7 @@ mountSheet();
 function changeMood(newMood: Mood): void {
   setActiveMoodButton(newMood);
   applyMoodUI(newMood);
+  updateMediaSessionMood(newMood);
 
   if (!store.get().isPlaying) {
     store.set({ currentMood: newMood });
@@ -117,25 +129,40 @@ function changeMood(newMood: Mood): void {
 
 mountMoodUI(changeMood);
 
-mountPlayButton(async () => {
+async function toggle(): Promise<void> {
   if (!audio) {
     audio = initAudio(store);
     buildRainLayers(audio);
     startTapeHiss(audio);
     controls.applyMoodSettings(store.get().currentMood);
   }
-  if (audio.actx.state === "suspended") await audio.actx.resume();
+  // Capture in a local const so TypeScript retains the non-null type across await.
+  const refs: AudioRefs = audio;
+  if (refs.actx.state === "suspended") await refs.actx.resume();
 
-  const volSlider = document.getElementById("volSlider") as
-    | HTMLInputElement
-    | null;
+  if (!mediaSessionReady) {
+    mediaSessionReady = true;
+    setupMediaSession(refs, store, {
+      onPlay: () => {
+        if (!store.get().isPlaying) void toggle();
+      },
+      onPause: () => {
+        if (store.get().isPlaying) void toggle();
+      },
+      onNext: () => {
+        if (audio) newProgression(audio, store.get().currentMood, true);
+      },
+    });
+  }
+
+  const volSlider = document.getElementById("volSlider") as HTMLInputElement | null;
   const userVol = sliderToGain(parseFloat(volSlider?.value ?? "0.65"));
 
   if (store.get().isPlaying) {
-    const now = audio.actx.currentTime;
-    audio.masterGain.gain.cancelScheduledValues(now);
-    audio.masterGain.gain.setValueAtTime(audio.masterGain.gain.value, now);
-    audio.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
+    const now = refs.actx.currentTime;
+    refs.masterGain.gain.cancelScheduledValues(now);
+    refs.masterGain.gain.setValueAtTime(refs.masterGain.gain.value, now);
+    refs.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
     setTimeout(() => {
       stopScheduler();
       stopAmbience();
@@ -143,19 +170,23 @@ mountPlayButton(async () => {
     store.set({ isPlaying: false });
     setPlayIcon(false);
     setStatusPlaying(false);
+    setMediaSessionPlaybackState(false);
   } else {
-    const now = audio.actx.currentTime;
-    audio.masterGain.gain.cancelScheduledValues(now);
-    audio.masterGain.gain.setValueAtTime(0.0001, now);
+    const now = refs.actx.currentTime;
+    refs.masterGain.gain.cancelScheduledValues(now);
+    refs.masterGain.gain.setValueAtTime(0.0001, now);
     store.set({ isPlaying: true });
-    startScheduler(audio, store);
-    startAmbience(audio, store.get().currentMood, store);
-    startScratches(audio, store);
-    audio.masterGain.gain.linearRampToValueAtTime(userVol, now + 1.2);
+    startScheduler(refs, store);
+    startAmbience(refs, store.get().currentMood, store);
+    startScratches(refs, store);
+    refs.masterGain.gain.linearRampToValueAtTime(userVol, now + 1.2);
     setPlayIcon(true);
     setStatusPlaying(true);
+    setMediaSessionPlaybackState(true);
   }
-});
+}
+
+mountPlayButton(toggle);
 
 const skipBtn = document.getElementById("skipBtn");
 if (skipBtn) {
