@@ -44,14 +44,21 @@ export function setupMediaSession(
     }
   });
 
-  // Near-silent keepalive oscillator (~-100 dB). iOS will suspend the
-  // AudioContext if it detects no audio output — this prevents that
-  // without being audible.
+  // Near-silent keepalive oscillator (~-100 dB) fed to both the AudioContext
+  // destination and a hidden <audio> element via MediaStreamDestination.
+  // iOS will not suspend an AudioContext while an <audio> element is playing;
+  // the oscillator alone is insufficient — the <audio> element is what holds
+  // the AVAudioSession open when the app is backgrounded.
   const osc = audio.actx.createOscillator();
   const gain = audio.actx.createGain();
   gain.gain.value = 1e-5;
   osc.connect(gain);
   gain.connect(audio.actx.destination);
+  const streamDest = audio.actx.createMediaStreamDestination();
+  gain.connect(streamDest);
+  const silentEl = document.createElement("audio");
+  silentEl.srcObject = streamDest.stream;
+  silentEl.play().catch(() => {});
   osc.start();
 }
 
