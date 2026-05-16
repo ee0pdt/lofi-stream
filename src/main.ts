@@ -50,16 +50,6 @@ registerServiceWorker();
 maybeShowIOSBanner();
 (document.getElementById("versionTxt") as HTMLElement).textContent = VERSION;
 
-const tickEl = document.getElementById("tickTxt") as HTMLElement;
-let ticks = 0;
-setInterval(() => {
-  const state = audio?.actx.state ?? "none";
-  tickEl.textContent = `t:${++ticks} ${state}`;
-  if ((state === "suspended" || state === "interrupted") && store.get().isPlaying && audio) {
-    audio.actx.resume().catch(() => {});
-  }
-}, 1000);
-
 const bgCanvas = document.getElementById("bg") as HTMLCanvasElement;
 const visCanvas = document.getElementById("vis") as HTMLCanvasElement;
 mountBackground(
