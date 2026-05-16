@@ -49,17 +49,19 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
 async function zlibCompress(data: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
-  const reader = cs.readable.getReader();
-  await writer.write(
-    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
+  // Write and read concurrently — awaiting write before reading deadlocks on large inputs
+  // because the stream's internal buffer fills and blocks until the reader drains it.
+  const writePromise = writer.write(data as unknown as Uint8Array<ArrayBuffer>).then(() =>
+    writer.close()
   );
-  await writer.close();
   const chunks: Uint8Array[] = [];
+  const reader = cs.readable.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
   }
+  await writePromise;
   return concat(...chunks);
 }
 
@@ -148,11 +150,11 @@ function rasterize(size: number): Uint8Array {
 // ---- Write files ----
 
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="22" fill="#111"/>
-  <circle cx="50" cy="50" r="28" fill="#c97d40"/>
-  <rect x="35" y="43" width="30" height="3.5" rx="1.75" fill="#111" opacity="0.55"/>
-  <rect x="37" y="50" width="26" height="3.5" rx="1.75" fill="#111" opacity="0.55"/>
-  <rect x="35" y="57" width="30" height="3.5" rx="1.75" fill="#111" opacity="0.55"/>
+  <rect width="100" height="100" rx="22" fill="#111" />
+  <circle cx="50" cy="50" r="28" fill="#c97d40" />
+  <rect x="35" y="43" width="30" height="3.5" rx="1.75" fill="#111" opacity="0.55" />
+  <rect x="37" y="50" width="26" height="3.5" rx="1.75" fill="#111" opacity="0.55" />
+  <rect x="35" y="57" width="30" height="3.5" rx="1.75" fill="#111" opacity="0.55" />
 </svg>
 `;
 
