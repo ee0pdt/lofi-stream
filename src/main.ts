@@ -14,6 +14,7 @@ import {
   flushScheduler,
   isSchedulerRunning,
   newProgression,
+  resetImprovState,
   resetSchedulerTime,
   setCurrentBPM,
   startScheduler,
@@ -30,7 +31,13 @@ import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
 import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
 import { initKnobDrag, mountControls, updateKnobSvg } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
-import { applyMoodUI, mountMoodUI, setActiveMoodButton } from "./ui/mood-ui.ts";
+import {
+  applyMoodUI,
+  mountImprovUI,
+  mountMoodUI,
+  setActiveMoodButton,
+  setImprovButtonState,
+} from "./ui/mood-ui.ts";
 import { mountPlayButton, setPlayIcon, setStatusPlaying } from "./ui/play-button.ts";
 import {
   maybeShowIOSBanner,
@@ -74,6 +81,11 @@ mountSheet();
 
 function changeMood(newMood: Mood): void {
   setActiveMoodButton(newMood);
+  if (store.get().isImprov) {
+    store.set({ isImprov: false });
+    setImprovButtonState(false);
+    resetImprovState();
+  }
   applyMoodUI(newMood);
   updateMediaSessionMood(newMood);
 
@@ -131,6 +143,13 @@ function changeMood(newMood: Mood): void {
 }
 
 mountMoodUI(changeMood);
+
+mountImprovUI(() => {
+  const next = !store.get().isImprov;
+  store.set({ isImprov: next });
+  setImprovButtonState(next);
+  if (!next) resetImprovState();
+});
 
 async function toggle(): Promise<void> {
   if (!audio) {
