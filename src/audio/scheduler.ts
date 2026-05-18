@@ -158,8 +158,10 @@ function scheduleBar(
   const bd = beatDur(currentBPM);
 
   // In Improv mode `dynamicLevel` scales velocity (loudness) and
-  // `effectiveComplexity` (= complexity * dynamicLevel) gates density
-  // and probability — quieter sections get both quieter AND sparser.
+  // `effectiveComplexity` gates density/probability. The formula is an
+  // additive offset around 0.5 so peak sections push complexity ABOVE
+  // the user's baseline (more notes) and break sections pull it below
+  // (sparser) — rather than always reducing it as a pure product would.
   let prog: readonly [Chord, Chord, Chord, Chord];
   let nextProg: readonly [Chord, Chord, Chord, Chord];
   let effectiveComplexity = complexity;
@@ -168,9 +170,9 @@ function scheduleBar(
 
   if (isImprov) {
     prog = improvState.prog;
-    nextProg = improvState.prog; // bridge/normal both use same prog for the section
+    nextProg = improvState.prog; // improv has no cross-section lookahead; same prog wraps
     dynamicLevel = improvState.dynamicLevel;
-    effectiveComplexity = complexity * dynamicLevel;
+    effectiveComplexity = Math.max(0, Math.min(1, complexity + (dynamicLevel - 0.5)));
     phraseStyle = phraseStyleFromDyn(dynamicLevel);
   } else {
     prog = currentSectionProg(currentForm, {

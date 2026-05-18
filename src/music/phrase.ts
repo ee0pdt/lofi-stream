@@ -79,7 +79,10 @@ export function generatePhrase(
   prog.forEach(([rootOffset, voicingName], barIdx) => {
     const voicing = VOICINGS[voicingName];
     const rootMidi = 48 + ((currentKey + rootOffset) % 12);
-    const chordTones = voicing.map((iv) => melodyOct(rootMidi + iv));
+    // Dense style lifts the melody up an octave so peak/buildup sections
+    // sit audibly above normal sections in register.
+    const octaveLift = style === "dense" ? 12 : 0;
+    const chordTones = voicing.map((iv) => melodyOct(rootMidi + iv) + octaveLift);
     const barMelody: PhraseNote[] = [];
     const isCall = barIdx < 2;
 
@@ -147,13 +150,30 @@ export function generatePhrase(
             anticipation: true,
           });
         }
-        // Extra mid-bar passing note
-        if (rng() < 0.6) {
+        // Extra mid-bar passing note — high probability so dense feels busy.
+        if (rng() < 0.85) {
           const passing = chordTones[Math.floor(rng() * chordTones.length)];
           barMelody.push({
             beat: beatDur * (isCall ? 2.25 : 2.75),
             midi: passing,
             dur: beatDur * 0.4,
+          });
+        }
+        // Bar-end 16th-note fill: 2 quick chord-tone notes leading up to
+        // the next bar. Adds the "running line" feel that peak sections
+        // need to register as a high-energy moment.
+        if (rng() < 0.7) {
+          const fillA = chordTones[Math.floor(rng() * chordTones.length)];
+          const fillB = chordTones[Math.floor(rng() * chordTones.length)];
+          barMelody.push({
+            beat: beatDur * 3.5,
+            midi: fillA,
+            dur: beatDur * 0.22,
+          });
+          barMelody.push({
+            beat: beatDur * 3.75,
+            midi: fillB,
+            dur: beatDur * 0.22,
           });
         }
       }
