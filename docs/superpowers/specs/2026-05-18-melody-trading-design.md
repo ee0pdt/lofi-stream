@@ -60,8 +60,8 @@ Two `VoiceState` instances live in the scheduler (`voice1`, `voice2`). They neve
 
 - Always `structured` (never breaks out).
 - Generates sparse-style phrases (`phraseStyle: "sparse"`) anchored to the same form chord as the lead.
-- Velocity scaled to ~0.6× of the lead's velocity baseline.
-- Phrase generation seeded with the lead's last note via the existing `seedNote` mechanism so the support's contour relates to the lead's.
+- Velocity baselines (pinned, not relative): **lead = 0.17, support = 0.10** — matches today's `base = 0.17`, `secondary fills = 0.10` ratios.
+- **Phrase seeding (new behaviour vs. today's per-lane self-seeding):** support's phrase is seeded with the *lead's* last note via the existing `seedNote` mechanism so the support's contour relates to the lead's. Lead is self-seeded from its own last note. This is the only deliberate musical change in the rewrite besides timbre separation.
 - **Soloist breathing rule:** when the lead enters `improv` mode (break-out), support goes silent for that phrase. Resumes the following phrase.
 
 ### Trading mechanics
@@ -112,6 +112,10 @@ improv: {
 
 `LaneDef` (in `src/types.ts`) is removed. `voice-lane.ts` is replaced with `voice.ts` exposing `VoiceState`, `initVoice`, `startNextPhrase`, `advanceVoiceBar`, `swapRoles`.
 
+### Anticipation notes (preserved behaviour)
+
+Today's scheduler peeks at `nextBarMelody[0].anticipation` and plays the first note of the next bar a quarter-beat early when the flag is set. This applies to both the base melody (scheduler.ts:273–283) and lane fills (322–333). The new voice-based scheduler must preserve this. Since `anticipation` is a property of generated `Phrase` notes, the scheduler keeps doing the same `nextBarMelody[0]?.anticipation` peek using each voice's `phrase` field — the logic moves but the behaviour is identical.
+
 ### Mixer / track buses
 
 - `index.html`: change the comp knob label "piano" → "chords". Keep `data-track="comp"` and `id="mx-comp"` unchanged (audio routing is unaffected; `playComp` still uses `MOOD_META[mood].compTimbre`).
@@ -126,14 +130,27 @@ Replaces the waveform render currently drawn into `#vis` (400×56 canvas). Same 
 **Data flow:**
 
 1. Every place the scheduler calls `playMelodyTimbre`, `playComp`, or `playBass`, it also calls a new `recordNote({ time, midi, dur, voice })` function in a new module `src/visual/piano-roll.ts`.
-2. `recordNote` pushes into a ring buffer (capacity ~256 notes, prune by `time + dur < now - window`).
+2. `recordNote` pushes into a ring buffer (capacity ~256 notes, prune by `time + dur < now - halfWindowSec`).
 3. A `requestAnimationFrame` loop reads the buffer and renders rectangles onto the `#vis` canvas.
+
+**Voice type used by `recordNote`:**
+
+```ts
+type RollVoice = "chords" | "bass" | "mel1" | "mel2";
+function recordNote(note: { time: number; midi: number; dur: number; voice: RollVoice }): void;
+```
+
+This is **a different type** from the `voice: 1 | 2` parameter on `playMelodyTimbre`. Call sites translate at the boundary, e.g. `recordNote({ ..., voice: voiceId === 1 ? "mel1" : "mel2" })`. Keeping them separate avoids leaking renderer-internal categories (chords, bass) into the audio API.
 
 **Layout:**
 
-- Time on x-axis. Window width = 4 bars at current BPM. Playhead at right edge; notes slide right-to-left.
-- MIDI pitch on y-axis, clamped to range 36–84 (4 octaves; covers bass low to vibes high).
-- A note's rectangle: `x = canvasWidth * (1 - (time - now) / windowSec)`, `y = canvasHeight * (1 - (midi - 36) / 48)`, width = `dur / windowSec * canvasWidth`, height = ~3px.
+- Time on x-axis. Total window = 4 bars at current BPM, **centred on the playhead**: 2 bars of past notes on the left, 2 bars of upcoming notes on the right (the existing 3-second scheduler lookahead populates the future side). Playhead is a vertical line drawn at `x = canvasWidth / 2`.
+- As real time advances, notes scroll right-to-left across the canvas: a future note appears on the right, crosses the playhead the instant it sounds, then slides off to the left.
+- Position formula (`now = audio.actx.currentTime`, `halfWindowSec = (4 bars * barDur) / 2`):
+  - `x = canvasWidth * (0.5 + (time - now) / (2 * halfWindowSec))`
+  - At `time = now`: `x = canvasWidth / 2` (playhead). At `time = now + halfWindowSec`: `x = canvasWidth` (right edge). At `time = now - halfWindowSec`: `x = 0` (left edge).
+- MIDI pitch on y-axis: `y = canvasHeight * (1 - (clamp(midi, 36, 84) - 36) / 48)`. Out-of-range notes are **clipped to the nearest edge** rather than hidden, so an unusually low bass note still renders at the bottom row.
+- Note width = `dur / (2 * halfWindowSec) * canvasWidth`, height = ~3px.
 
 **Voice colour scheme (fixed across all moods):**
 
@@ -223,8 +240,8 @@ Scheduler.scheduleBar(barStart)
 Three phases, each ships independently behind the existing `isImprov` toggle:
 
 1. **Phase 1 — Piano-roll viz.** Add `src/visual/piano-roll.ts`. Hook `recordNote` into the existing 3-layer scheduler with this temporary mapping: base melody → `mel1` colour (coral), primary lane → `mel2` colour (teal), secondary lane → also `mel2` colour (acceptable since secondary is sparse and rarely overlaps primary). Chords + bass record under their own colours. Replace `#vis` renderer with the piano roll. *Outcome:* viz works against today's audio, so phase 2 is verifiable as we build it.
-2. **Phase 2 — Voice model refactor.** Replace `voice-lane.ts` with `voice.ts`. Update `MOOD_META` schema. Rewrite the scheduler's melody section. Update viz `recordNote` calls to use new voice ids. *Outcome:* listener hears two distinct timbres in every mood; viz confirms it.
-3. **Phase 3 — Mixer split + rename.** Add `melody1`/`melody2` track buses. Update `playMelodyTimbre` signature. Update `index.html` mixer grid and `controls.ts` selector map. Rename "piano" → "chords". *Outcome:* independent mix control per voice.
+2. **Phase 2 — Voice model refactor.** Replace `voice-lane.ts` with `voice.ts`. Update `MOOD_META` schema. Rewrite the scheduler's melody section. Update viz `recordNote` calls to use new voice ids. *Intermediate state worth flagging:* between Phase 2 and Phase 3, both `voice1` and `voice2` still route through the single `trackGains.melody` bus — they sound distinct (different timbres, different roles) but the listener can't mix them independently yet. This is expected, not a bug. *Outcome:* listener hears two distinct timbres in every mood; viz confirms it.
+3. **Phase 3 — Mixer split + rename.** Add `melody1`/`melody2` track buses. Update `playMelodyTimbre` signature to take `voice: 1 | 2` and route accordingly. Update `index.html` mixer grid and `controls.ts` selector map. Rename "piano" → "chords". *Outcome:* independent mix control per voice.
 
 ## Open questions
 
