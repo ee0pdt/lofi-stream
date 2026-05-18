@@ -127,6 +127,13 @@ function advancePlayhead(): void {
   }
 }
 
+/**
+ * Map a dynamicLevel into a PhraseStyle. Thresholds align with the
+ * section PROFILES in improv-sequencer.ts: break sections (≤0.2) get
+ * sparse phrases, buildup/peak (≥0.6) get dense, everything else
+ * (normal/bridge) stays normal. Keep these thresholds in sync if
+ * PROFILES change.
+ */
 function phraseStyleFromDyn(dyn: number): PhraseStyle {
   if (dyn < 0.25) return "sparse";
   if (dyn > 0.65) return "dense";
@@ -150,6 +157,9 @@ function scheduleBar(
   const { currentMood: mood, complexity, isImprov } = state;
   const bd = beatDur(currentBPM);
 
+  // In Improv mode `dynamicLevel` scales velocity (loudness) and
+  // `effectiveComplexity` (= complexity * dynamicLevel) gates density
+  // and probability — quieter sections get both quieter AND sparser.
   let prog: readonly [Chord, Chord, Chord, Chord];
   let nextProg: readonly [Chord, Chord, Chord, Chord];
   let effectiveComplexity = complexity;
@@ -274,6 +284,8 @@ function scheduleBar(
 
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
 
+  // Floor at 0.15 so kick/snare stay audible (as brushes) during
+  // break sections where dynamicLevel can drop near zero.
   const drumScale = Math.max(0.15, dynamicLevel);
 
   for (let i = 0; i < 16; i++) {
