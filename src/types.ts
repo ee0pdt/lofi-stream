@@ -49,29 +49,17 @@ export interface FormSection {
 export type Form = readonly FormSection[];
 
 /**
- * A single melodic voice lane. The primary lane is always active; the
- * optional secondary lane plays call-and-response fills alongside the primary.
- * `breakoutThreshold` is the melody energy level (0-1) above which the lane
- * may spontaneously switch from structured phrases into an improv run.
- */
-export interface LaneDef {
-  readonly timbre: Timbre;
-  readonly breakoutThreshold: number;
-}
-
-/**
- * Per-mood improv-mode configuration. Drives the improv sequencer:
- * `peakDensityCap` clamps how loud a mood can get at peak energy, and
- * `bridgeSubstitutions` is the alternate 4-chord progression used during
- * bridge sections. `lanes` defines which melodic voices are active.
+ * Per-mood improv-mode configuration. Two distinct melodic timbres are
+ * required; the role of `lead` and `support` swaps probabilistically at
+ * phrase boundaries (see `voice.ts`). `breakoutThreshold` is the melody
+ * energy level (0-1) above which the current lead may switch from
+ * structured phrases into a dense improv run.
  */
 export interface MoodImprovConfig {
   readonly peakDensityCap: number;
   readonly bridgeSubstitutions: readonly [Chord, Chord, Chord, Chord];
-  readonly lanes: {
-    readonly primary: LaneDef;
-    readonly secondary?: LaneDef;
-  };
+  readonly voices: readonly [Timbre, Timbre];
+  readonly breakoutThreshold: number;
 }
 
 /**
