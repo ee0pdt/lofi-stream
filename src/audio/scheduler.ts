@@ -14,8 +14,15 @@ import { VOICINGS } from "../music/voicings.ts";
 import { walkingBassNotes } from "../music/bass.ts";
 import { compOct } from "../music/octaves.ts";
 import { currentSectionProg, nextFormPosition } from "../music/playhead.ts";
-import { generatePhrase, type Phrase, type PhraseStyle } from "../music/phrase.ts";
+import { type PhraseStyle } from "../music/phrase.ts";
 import { type EnergyState, initEnergyState, stepEnergyState } from "../music/improv-energy.ts";
+import {
+  advanceLaneBar,
+  initLaneState,
+  type LaneState,
+  startNextPhrase,
+  updateLaneMidi,
+} from "../music/voice-lane.ts";
 import {
   GHOST_PAT,
   HAT_PAT,
@@ -28,7 +35,7 @@ import { beatDur, swungTime } from "./timing.ts";
 import { playKick } from "./timbres/kick.ts";
 import { playSnare } from "./timbres/snare.ts";
 import { playHat } from "./timbres/hat.ts";
-import { playBass, playComp, playMelody } from "./voices.ts";
+import { playBass, playComp, playMelodyTimbre } from "./voices.ts";
 import { applyMoodReverb } from "./graph.ts";
 import { pickFrom, randInt, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Chord, Form, Mood } from "../types.ts";
@@ -41,15 +48,17 @@ let currentForm: Form = [];
 let formSectionIdx = 0;
 let formBarInSection = 0;
 let currentProgIdx = 0;
-let currentPhrase: Phrase | null = null;
-let phraseBarIdx = 0;
 let currentKey = 0;
 let currentBPM = 75;
 let swingAmount = 0.08;
 let nextBarTime = 0;
 let timerHandle: number | null = null;
 let energyState: EnergyState = initEnergyState("rainy");
-let lastEmittedMidi: number | null = null;
+let primaryLane: LaneState = initLaneState(
+  { timbre: "rhodes", breakoutThreshold: 0.72 },
+  false,
+);
+let secondaryLane: LaneState | null = null;
 
 const NOTES = [
   "C",
@@ -82,10 +91,10 @@ export function newProgression(
   formSectionIdx = 0;
   formBarInSection = 0;
   currentProgIdx = 0;
-  currentPhrase = null;
-  phraseBarIdx = 0;
   energyState = initEnergyState(mood);
-  lastEmittedMidi = null;
+  const lanes = MOOD_META[mood].improv.lanes;
+  primaryLane = initLaneState(lanes.primary, false);
+  secondaryLane = lanes.secondary ? initLaneState(lanes.secondary, true) : null;
 
   const bpmSlider = document.getElementById("bpmSlider");
   if (bpmSlider instanceof HTMLInputElement) bpmSlider.value = String(currentBPM);
@@ -116,16 +125,16 @@ function advancePlayhead(): void {
   formSectionIdx = position.sectionIdx;
   formBarInSection = position.barInSection;
   if (sectionChanged) {
-    currentPhrase = null;
-    phraseBarIdx = 0;
+    primaryLane = initLaneState(primaryLane.def, false);
+    if (secondaryLane) secondaryLane = initLaneState(secondaryLane.def, true);
   }
 }
 
 export function resetImprovState(mood: Mood = "rainy"): void {
   energyState = initEnergyState(mood);
-  lastEmittedMidi = null;
-  currentPhrase = null;
-  phraseBarIdx = 0;
+  const lanes = MOOD_META[mood].improv.lanes;
+  primaryLane = initLaneState(lanes.primary, false);
+  secondaryLane = lanes.secondary ? initLaneState(lanes.secondary, true) : null;
 }
 
 function scheduleBar(
@@ -147,7 +156,6 @@ function scheduleBar(
   let prog: readonly [Chord, Chord, Chord, Chord];
   let nextProg: readonly [Chord, Chord, Chord, Chord];
   let effectiveComplexity = complexity;
-  let dynamicLevel = 1.0; // melody / default velocity scale
   let compVelScale = 1.0;
   let bassVelScale = 1.0;
   let drumVelScale = 1.0;
@@ -157,8 +165,7 @@ function scheduleBar(
     const { melody: melEnergy, comp: compEnergy, bass: bassEnergy, drums: drumEnergy } =
       energyState.energies;
     prog = energyState.prog;
-    nextProg = energyState.prog; // improv has no cross-section lookahead; same prog wraps
-    dynamicLevel = melEnergy;
+    nextProg = energyState.prog;
     compVelScale = compEnergy;
     bassVelScale = bassEnergy;
     drumVelScale = drumEnergy;
@@ -227,38 +234,61 @@ function scheduleBar(
     }
   });
 
-  if (phraseBarIdx === 0 || currentPhrase === null) {
-    currentPhrase = generatePhrase(prog, {
-      currentKey,
-      complexity: effectiveComplexity,
-      beatDur: bd,
-      phraseStyle: isImprov ? phraseStyle : undefined,
-      seedNote: isImprov ? lastEmittedMidi ?? undefined : undefined,
-    });
-  }
-  const barMelody = currentPhrase[phraseBarIdx % currentPhrase.length];
-  for (const note of barMelody) {
-    const noteTime = barStart + note.beat;
-    if (noteTime >= barStart - 0.01) {
-      playMelody(audio, note.midi, noteTime, note.dur, 0.17 * dynamicLevel, "rhodesMel", mood);
+  // --- Lane-based melody scheduling ---
+  // Primary lane: always plays. Secondary lane (if present): call-and-response
+  // fills, goes quiet while primary is soloing.
+  const activeLanes: Array<{ lane: LaneState; isSecondary: boolean }> = [
+    { lane: primaryLane, isSecondary: false },
+  ];
+  if (secondaryLane) activeLanes.push({ lane: secondaryLane, isSecondary: true });
+
+  for (const entry of activeLanes) {
+    let lane = entry.lane;
+    const silent = entry.isSecondary && primaryLane.mode === "improv";
+
+    if (lane.phraseBarIdx === 0 || lane.phrase === null) {
+      lane = startNextPhrase(lane, {
+        prog,
+        currentKey,
+        complexity: effectiveComplexity,
+        beatDur: bd,
+        melodyEnergy: energyState.energies.melody,
+        isImprov,
+        primaryMode: primaryLane.mode,
+        rng: Math.random,
+      });
     }
+
+    if (!silent && lane.phrase) {
+      const barMelody = lane.phrase[lane.phraseBarIdx % lane.phrase.length];
+      const vel = entry.isSecondary ? 0.12 : 0.17;
+      for (const note of barMelody) {
+        const noteTime = barStart + note.beat;
+        if (noteTime >= barStart - 0.01) {
+          playMelodyTimbre(audio, note.midi, noteTime, note.dur, vel, "mel", lane.def.timbre);
+        }
+      }
+      // Anticipation look-ahead into next bar
+      const nextBarMelody = lane.phrase[(lane.phraseBarIdx + 1) % lane.phrase.length];
+      if (nextBarMelody?.[0]?.anticipation) {
+        playMelodyTimbre(
+          audio,
+          nextBarMelody[0].midi,
+          barStart + bd * 4 - bd * 0.25,
+          nextBarMelody[0].dur,
+          vel * 0.82,
+          "mel",
+          lane.def.timbre,
+        );
+      }
+      const lastNote = barMelody[barMelody.length - 1];
+      lane = updateLaneMidi(lane, lastNote?.midi ?? null);
+    }
+
+    lane = advanceLaneBar(lane);
+    if (entry.isSecondary) secondaryLane = lane;
+    else primaryLane = lane;
   }
-  if (barMelody.length > 0) {
-    lastEmittedMidi = barMelody[barMelody.length - 1].midi;
-  }
-  const nextBarMelody = currentPhrase[(phraseBarIdx + 1) % currentPhrase.length];
-  if (nextBarMelody && nextBarMelody[0] && nextBarMelody[0].anticipation) {
-    playMelody(
-      audio,
-      nextBarMelody[0].midi,
-      barStart + bd * 4 - bd * 0.25,
-      nextBarMelody[0].dur,
-      0.14 * dynamicLevel,
-      "rhodesMel",
-      mood,
-    );
-  }
-  phraseBarIdx++;
 
   const bassNotes = walkingBassNotes(rootMidi, voicing, nextRoot);
   bassNotes.forEach((midiNote, i) => {
@@ -344,11 +374,10 @@ function tick(audio: AudioRefs, store: Store<AppState>): void {
     if (store.get().isImprov) {
       const prevAge = energyState.progBarAge;
       energyState = stepEnergyState(energyState, store.get().currentMood, Math.random);
-      // When progBarAge resets to 0, the prog just changed — clear phrase cache.
+      // When progBarAge resets to 0, the prog just changed — reset lane phrases.
       if (energyState.progBarAge === 0 && prevAge > 0) {
-        currentPhrase = null;
-        phraseBarIdx = 0;
-        lastEmittedMidi = null;
+        primaryLane = initLaneState(primaryLane.def, false);
+        if (secondaryLane) secondaryLane = initLaneState(secondaryLane.def, true);
       }
     } else {
       advancePlayhead();
@@ -409,11 +438,11 @@ export function setCurrentBPM(bpm: number): void {
   if (trackSub) trackSub.textContent = `${NOTES[currentKey]} · ${currentBPM} bpm`;
 }
 
-/** Cycle through the 12 chromatic keys. Clears the phrase cache. */
+/** Cycle through the 12 chromatic keys. Resets lane phrase caches. */
 export function cycleCurrentKey(): void {
   currentKey = (currentKey + 1) % 12;
-  currentPhrase = null;
-  phraseBarIdx = 0;
+  primaryLane = initLaneState(primaryLane.def, false);
+  if (secondaryLane) secondaryLane = initLaneState(secondaryLane.def, true);
   const keyName = NOTES[currentKey];
   const keyVal = document.getElementById("keyVal");
   if (keyVal) keyVal.textContent = keyName;

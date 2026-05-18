@@ -38,7 +38,19 @@ export function playMelody(
   role: string,
   mood: Mood,
 ): void {
-  const timbre = MOOD_META[mood].melTimbre;
+  playMelodyTimbre(audio, midi, time, dur, vel, role, MOOD_META[mood].melTimbre);
+}
+
+/** Play a melody note with an explicit timbre rather than deriving it from mood. */
+export function playMelodyTimbre(
+  audio: AudioRefs,
+  midi: number,
+  time: number,
+  dur: number,
+  vel: number,
+  role: string,
+  timbre: import("../types.ts").Timbre,
+): void {
   if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
   else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role);
   else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role);

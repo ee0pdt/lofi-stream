@@ -59,3 +59,66 @@ Deno.test("stepEnergyState: trading — highest energy voice gets nudge up, othe
   assertEquals(after.energies.melody >= after.energies.comp, true);
   assertEquals(after.energies.melody >= after.energies.bass, true);
 });
+
+import {
+  advanceLaneBar,
+  initLaneState,
+  startNextPhrase,
+  updateLaneMidi,
+} from "../src/music/voice-lane.ts";
+import { FORMS } from "../src/music/forms.ts";
+
+const testProg = FORMS["late"][0].prog;
+
+Deno.test("voice-lane: initLaneState defaults", () => {
+  const s = initLaneState({ timbre: "vibraphone", breakoutThreshold: 0.65 }, false);
+  assertEquals(s.phrase, null);
+  assertEquals(s.phraseBarIdx, 0);
+  assertEquals(s.mode, "structured");
+  assertEquals(s.isSecondary, false);
+});
+
+Deno.test("voice-lane: startNextPhrase generates a phrase", () => {
+  const s = initLaneState({ timbre: "vibraphone", breakoutThreshold: 0.65 }, false);
+  const next = startNextPhrase(s, {
+    prog: testProg,
+    currentKey: 0,
+    complexity: 0.5,
+    beatDur: 60 / 70,
+    melodyEnergy: 0.5,
+    isImprov: true,
+    primaryMode: "structured",
+    rng: Math.random,
+  });
+  assertEquals(next.phrase !== null, true);
+  assertEquals(next.phraseBarIdx, 0);
+});
+
+Deno.test("voice-lane: secondary stays structured when primary is improv", () => {
+  const s = initLaneState({ timbre: "bell", breakoutThreshold: 0.82 }, true);
+  const next = startNextPhrase(s, {
+    prog: testProg,
+    currentKey: 0,
+    complexity: 0.8,
+    beatDur: 60 / 70,
+    melodyEnergy: 0.9,
+    isImprov: true,
+    primaryMode: "improv",
+    rng: Math.random,
+  });
+  assertEquals(next.mode, "structured");
+});
+
+Deno.test("voice-lane: advanceLaneBar increments phraseBarIdx", () => {
+  let s = initLaneState({ timbre: "rhodes", breakoutThreshold: 0.72 }, false);
+  s = advanceLaneBar(s);
+  assertEquals(s.phraseBarIdx, 1);
+  s = advanceLaneBar(s);
+  assertEquals(s.phraseBarIdx, 2);
+});
+
+Deno.test("voice-lane: updateLaneMidi stores last midi", () => {
+  const s = initLaneState({ timbre: "rhodes", breakoutThreshold: 0.72 }, false);
+  const next = updateLaneMidi(s, 64);
+  assertEquals(next.lastMidi, 64);
+});

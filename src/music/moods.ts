@@ -27,6 +27,9 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
         [3, "maj9"],
         [8, "dom9"],
       ],
+      lanes: {
+        primary: { timbre: "rhodes", breakoutThreshold: 0.72 },
+      },
     },
   },
   late: {
@@ -50,6 +53,10 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
         [0, "min9"],
         [5, "maj9"],
       ],
+      lanes: {
+        primary: { timbre: "vibraphone", breakoutThreshold: 0.62 },
+        secondary: { timbre: "bell", breakoutThreshold: 0.82 },
+      },
     },
   },
   cafe: {
@@ -73,6 +80,10 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
         [7, "maj9"],
         [0, "maj7"],
       ],
+      lanes: {
+        primary: { timbre: "rhodes", breakoutThreshold: 0.68 },
+        secondary: { timbre: "vibraphone", breakoutThreshold: 0.85 },
+      },
     },
   },
   sleepy: {
@@ -96,6 +107,9 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
         [8, "maj7"],
         [5, "min9"],
       ],
+      lanes: {
+        primary: { timbre: "celesta", breakoutThreshold: 0.78 },
+      },
     },
   },
   transit: {
@@ -119,6 +133,10 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
         [8, "dom9"],
         [3, "maj9"],
       ],
+      lanes: {
+        primary: { timbre: "bell", breakoutThreshold: 0.65 },
+        secondary: { timbre: "vibraphone", breakoutThreshold: 0.85 },
+      },
     },
   },
 };
