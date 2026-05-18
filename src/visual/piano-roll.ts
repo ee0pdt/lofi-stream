@@ -149,15 +149,17 @@ export function mountPianoRoll(
 
   function syncSize() {
     dpr = globalThis.devicePixelRatio || 1;
-    // Fullscreen canvas: prefer visualViewport, fall back to inner*, then
-    // to the canvas's own bounding box (headless test environments have
-    // no window dimensions but mock canvases still report a BCR).
+    // Viewport-only sizing. Don't fall back to the canvas's own BCR: with
+    // no CSS dimension override the canvas renders at its bitmap size, so
+    // BCR returns the canvas's CURRENT size and creates a feedback loop
+    // that doubles the bitmap every tick.
     const vv = globalThis.visualViewport;
-    let cssW = vv ? vv.width : globalThis.innerWidth;
-    let cssH = vv ? vv.height : globalThis.innerHeight;
+    let cssW = (vv && vv.width) || globalThis.innerWidth || 0;
+    let cssH = (vv && vv.height) || globalThis.innerHeight || 0;
+    // Headless test fallback: only if no window dims are available at all.
     if (!cssW || !cssH) {
       const rect = canvas.getBoundingClientRect?.();
-      if (rect) {
+      if (rect && rect.width > 0 && rect.width < 8192) {
         cssW = rect.width;
         cssH = rect.height;
       }
