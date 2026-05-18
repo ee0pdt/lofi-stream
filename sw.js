@@ -1,9 +1,10 @@
-// Service worker — cache-first strategy for offline support.
-// Bump CACHE_VERSION whenever deployed assets change.
+// Service worker — network-first for HTML (so UI updates always show),
+// cache-first for everything else. Bump CACHE_VERSION when precached
+// assets change.
 
 /* global self, caches, fetch */
 
-const CACHE_VERSION = "lofi-v3-improv";
+const CACHE_VERSION = "lofi-v4-improv";
 const PRECACHE = [
   "./",
   "./dist/main.js",
@@ -34,13 +35,34 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const req = event.request;
+  const isHTML = req.mode === "navigate" ||
+    (req.headers.get("accept") || "").includes("text/html");
+
+  if (isHTML) {
+    // Network-first: always try fresh HTML, fall back to cache when offline.
+    event.respondWith(
+      fetch(req)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(req, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(req).then((c) => c ?? Response.error())),
+    );
+    return;
+  }
+
+  // Cache-first for static assets (JS bundle, icons, manifest).
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).then((response) => {
+      return fetch(req).then((response) => {
         if (response.ok) {
           const clone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_VERSION).then((cache) => cache.put(req, clone));
         }
         return response;
       });
