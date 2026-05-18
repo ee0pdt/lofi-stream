@@ -6,7 +6,6 @@ import {
   startNextPhrase,
   swapRoles,
   updateVoiceMidi,
-  type VoiceState,
 } from "../src/music/voice.ts";
 
 const testProg = FORMS["late"][0].prog;
