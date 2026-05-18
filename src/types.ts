@@ -99,6 +99,7 @@ export interface AppState {
   currentMood: Mood;
   isPlaying: boolean;
   complexity: number;
+  isImprov: boolean;
 }
 
 /**

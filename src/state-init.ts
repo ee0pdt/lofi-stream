@@ -6,5 +6,6 @@ export function initialAppState(): AppState {
     currentMood: "rainy",
     isPlaying: false,
     complexity: DEFAULT_SETTINGS.rainy.complexity,
+    isImprov: false,
   };
 }
