@@ -22,7 +22,8 @@ Owns all Improv-mode structural logic. Exposes:
 ```ts
 interface ImprovState {
   sectionType: "normal" | "buildup" | "peak" | "break" | "bridge";
-  dynamicLevel: number;        // 0.0–1.0
+  dynamicLevel: number;        // 0.0–1.0, clamped to mood's peakDensityCap
+  prog: readonly [Chord, Chord, Chord, Chord];
   barsRemaining: number;
 }
 
@@ -30,15 +31,19 @@ function initImprovState(): ImprovState
 function advanceImprovSection(state: ImprovState, mood: Mood, rng?: () => number): ImprovState
 ```
 
+`advanceImprovSection` is responsible for clamping `dynamicLevel` to `MOOD_META[mood].improv.peakDensityCap` before returning the new state.
+
 **Section types and behaviour:**
 
-| Type | Dynamic level | Bar length | Description |
-|------|--------------|------------|-------------|
-| `normal` | 0.4–0.6 | 8–16 | Current composed behaviour; baseline energy |
-| `buildup` | 0.6–0.8 | 4–8 | Rising energy; denser melody, louder drums |
-| `peak` | 0.8–1.0 | 4–8 | Maximum density; fullest phrases |
-| `break` | 0.0–0.2 | 2–4 | Near-silence; 1–2 melody notes, brush hats only |
-| `bridge` | 0.3–0.6 | 4–8 | Alternate chord substitution; lighter feel |
+| Type | Dynamic level | Bar length | `prog` source | Description |
+|------|--------------|------------|---------------|-------------|
+| `normal` | 0.4–0.6 | 8–16 | random `FORMS[mood]` section | Baseline energy |
+| `buildup` | 0.6–0.8 | 4–8 | random `FORMS[mood]` section | Rising energy; denser melody, louder drums |
+| `peak` | 0.8–1.0 | 4–8 | random `FORMS[mood]` section | Maximum density; fullest phrases |
+| `break` | 0.0–0.2 | 2–4 | random `FORMS[mood]` section | Near-silence; 1–2 melody notes, brush hats only |
+| `bridge` | 0.3–0.6 | 4–8 | `MOOD_META[mood].improv.bridgeSubstitutions` | Alternate chord substitution; lighter feel |
+
+When `prog` source is "random `FORMS[mood]` section", `advanceImprovSection` picks one section uniformly at random from the mood's form and uses its `prog`. The section's *declared* `bars` count is ignored — bar length comes from the sequencer's per-type range above. The composed-mode form playhead (`currentSectionProg` / `nextFormPosition`) is not consulted in Improv mode.
 
 **Macro-arc transitions** (weighted, sampled per section end):
 
@@ -58,7 +63,8 @@ Transitions are never identical two cycles in a row (last-section rejection samp
 
 ```ts
 phraseStyle?: "sparse" | "normal" | "dense";
-seedNote?: number;   // last MIDI note of previous phrase's call
+seedNote?: number;   // last MIDI note of the previous phrase, used as the
+                     // anchor pitch for the new phrase's first note (bar 0)
 ```
 
 **`sparse`** (break sections): at most 2 notes per bar, long `dur`, no passing notes, no anticipations.
@@ -67,7 +73,7 @@ seedNote?: number;   // last MIDI note of previous phrase's call
 
 **`normal`**: existing behaviour, unchanged.
 
-**Call/response with `seedNote`**: if `seedNote` is provided, the response bars (2–3) begin from or near that pitch rather than always anchoring to the chord root. The response resolves downward to the root or 5th by bar 4. This gives phrases a conversational shape across the 4-bar unit.
+**Call/response with `seedNote`**: if `seedNote` is provided, the new phrase's bar-0 anchor (the call's first note) chooses the chord tone nearest in pitch to `seedNote` rather than always defaulting to the chord-1 tone. Within the phrase, the existing `isCall = barIdx < 2` split continues to shape bars 0–1 as call and 2–3 as response, with the response resolving downward toward the root or 5th by bar 4. The cross-phrase `seedNote` gives a conversational shape *between* phrases; the existing call/response shape lives *within* each phrase.
 
 Chromatic approach notes are the only "jazz inflection" added — one semitone below (or above) a chord tone, very short duration, lands just before the beat. No blue-note or scale-theory constraints.
 
@@ -87,10 +93,11 @@ improv: {
 ### `src/audio/scheduler.ts` — changes
 
 `scheduleBar` reads `store.get().isImprov`. When true:
-- Calls `advanceImprovSection` at the end of each section (instead of the fixed form loop).
+- Calls `advanceImprovSection` at the end of each section (instead of the fixed form loop) and uses the returned `prog` for the next section's bars.
 - Derives `phraseStyle` from `dynamicLevel`: `< 0.25` → `sparse`, `> 0.65` → `dense`, else `normal`.
+- Computes an **effective complexity** = `store.get().complexity * dynamicLevel` and passes that into `generatePhrase`. This means the user's complexity slider still scales overall busyness, but the section's energy arc shapes it further — so a high-complexity user still gets quiet breaks, and a low-complexity user still gets some lift at peak.
 - Passes `dynamicLevel` as an additional velocity/gain scalar to `playComp`, `playBass`, and the drum step scheduler (scales kick/snare velocity, not hat; floor of `0.15` so break sections retain a brush feel rather than full silence).
-- Passes the last note of the previous phrase's call bars as `seedNote` into the next `generatePhrase` call. `seedNote` resets to `null` at each new section boundary so phrasing starts fresh after a section change.
+- Passes the last MIDI note of the previous phrase (the final note emitted by the previous `generatePhrase` call, across all 4 bars) as `seedNote` into the next `generatePhrase` call. `seedNote` resets to `null` at each new section boundary so phrasing starts fresh after a section change.
 
 When Improv is off, `scheduleBar` is unchanged.
 
@@ -121,7 +128,7 @@ playComp / playMelody / playBass / drums  ← velocity scaled by dynamicLevel
 
 ## Testing
 
-- `src/music/improv-sequencer.ts` is pure (injectable RNG) — unit tests cover transition weights, last-section rejection, and `dynamicLevel` clamping per mood cap.
+- `src/music/improv-sequencer.ts` is pure (injectable RNG) — unit tests cover transition weights, last-section rejection, `dynamicLevel` clamping per mood cap, and that `prog` for non-bridge sections is sourced from `FORMS[mood]`.
 - `generatePhrase` tests extended to cover `phraseStyle` variants and `seedNote` behaviour.
 - Manual listening test: verify break sections are noticeably quieter, peak sections are denser, bridge sections use the substitution chords.
 
