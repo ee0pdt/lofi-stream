@@ -11,7 +11,7 @@
 
 import { MOOD_META } from "../music/moods.ts";
 import { DEFAULT_SETTINGS } from "../music/settings.ts";
-import type { AppState, AudioRefs, Mood, MoodSettings } from "../types.ts";
+import type { AppState, AudioRefs, Mood, MoodSettings, TrackKey } from "../types.ts";
 import type { Store } from "../store.ts";
 
 export interface SpatialPair {
@@ -217,28 +217,19 @@ export function initAudio(store: Store<AppState>): AudioRefs {
   const masterGain = actx.createGain();
   masterGain.gain.value = 0.65;
 
-  const trackKeys = [
-    "drums",
-    "bass",
-    "comp",
-    "melody",
-    "hiss",
-    "scratches",
-    "ambience",
-    "hum",
-  ] as const;
-  const defaultGains: Record<string, number> = {
+  const defaultGains: Record<TrackKey, number> = {
     drums: 0.9,
     bass: 0.85,
     comp: 0.8,
-    melody: 0.75,
+    melody1: 0.75,
+    melody2: 0.65,
     hiss: 0.5,
     scratches: 0.7,
     ambience: 0.6,
     hum: 0.4,
   };
-  const trackGains: Record<string, GainNode> = {};
-  for (const t of trackKeys) {
+  const trackGains = {} as Record<TrackKey, GainNode>;
+  for (const t of Object.keys(defaultGains) as TrackKey[]) {
     const g = actx.createGain();
     g.gain.value = defaultGains[t];
     g.connect(masterGain);

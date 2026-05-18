@@ -49,6 +49,20 @@ export interface FormSection {
 export type Form = readonly FormSection[];
 
 /**
+ * Per-mood improv-mode configuration. Two distinct melodic timbres are
+ * required; the role of `lead` and `support` swaps probabilistically at
+ * phrase boundaries (see `voice.ts`). `breakoutThreshold` is the melody
+ * energy level (0-1) above which the current lead may switch from
+ * structured phrases into a dense improv run.
+ */
+export interface MoodImprovConfig {
+  readonly peakDensityCap: number;
+  readonly bridgeSubstitutions: readonly [Chord, Chord, Chord, Chord];
+  readonly voices: readonly [Timbre, Timbre];
+  readonly breakoutThreshold: number;
+}
+
+/**
  * Per-mood timbral + harmonic configuration.
  */
 export interface MoodMeta {
@@ -64,6 +78,7 @@ export interface MoodMeta {
   readonly compTimbre: Timbre;
   readonly melTimbre: Timbre;
   readonly ambience: Ambience;
+  readonly improv: MoodImprovConfig;
 }
 
 /**
@@ -75,7 +90,8 @@ export interface Settings {
   readonly drums: number;
   readonly bass: number;
   readonly comp: number;
-  readonly melody: number;
+  readonly melody1: number;
+  readonly melody2: number;
   readonly hiss: number;
   readonly scratches: number;
   readonly hum: number;
@@ -99,7 +115,25 @@ export interface AppState {
   currentMood: Mood;
   isPlaying: boolean;
   complexity: number;
+  isImprov: boolean;
 }
+
+/**
+ * Per-track gain bus keys. Each maps to a `GainNode` in `AudioRefs.trackGains`.
+ * The set is exhaustive — any code that indexes `trackGains` must use one of
+ * these strings, which catches drift between the mixer and the audio graph at
+ * compile time.
+ */
+export type TrackKey =
+  | "drums"
+  | "bass"
+  | "comp"
+  | "melody1"
+  | "melody2"
+  | "hiss"
+  | "scratches"
+  | "ambience"
+  | "hum";
 
 /**
  * Bag of audio node references built by `initAudio`. Owned by
@@ -116,7 +150,7 @@ export interface AudioRefs {
   readonly wetGain: GainNode;
   readonly convolver: ConvolverNode;
   readonly analyser: AnalyserNode;
-  readonly trackGains: Record<string, GainNode>;
+  readonly trackGains: Record<TrackKey, GainNode>;
   readonly warpModGain: GainNode;
   readonly humGain: GainNode;
   readonly ambienceGain: GainNode;

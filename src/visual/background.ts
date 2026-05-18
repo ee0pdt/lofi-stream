@@ -42,3 +42,19 @@ export function createAmplitudeReader(
     return smoothed;
   };
 }
+
+/** Parse the current `--warm` CSS custom property into an [r,g,b] triple. */
+export function readAccentRgb(): readonly [number, number, number] {
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue("--warm")
+    .trim();
+  if (v.startsWith("#")) {
+    const r = parseInt(v.slice(1, 3), 16);
+    const g = parseInt(v.slice(3, 5), 16);
+    const b = parseInt(v.slice(5, 7), 16);
+    return [r, g, b];
+  }
+  const m = v.match(/(\d+(?:\.\d+)?)/g);
+  if (m && m.length >= 3) return [+m[0], +m[1], +m[2]];
+  return [201, 125, 64];
+}

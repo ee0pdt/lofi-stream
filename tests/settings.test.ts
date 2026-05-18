@@ -8,7 +8,8 @@ const SLIDER_KEYS = [
   "drums",
   "bass",
   "comp",
-  "melody",
+  "melody1",
+  "melody2",
   "hiss",
   "scratches",
   "hum",
@@ -24,7 +25,7 @@ Deno.test("DEFAULT_SETTINGS: contains exactly the five expected moods", () => {
   assertEquals(Object.keys(DEFAULT_SETTINGS).sort(), [...MOODS].sort());
 });
 
-Deno.test("DEFAULT_SETTINGS: each mood has all 13 slider keys", () => {
+Deno.test("DEFAULT_SETTINGS: each mood has all 14 slider keys", () => {
   for (const mood of MOODS) {
     const keys = Object.keys(DEFAULT_SETTINGS[mood]).sort();
     assertEquals(keys, [...SLIDER_KEYS].sort(), `${mood} keys mismatch`);

@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assert, assertEquals } from "jsr:@std/assert@^1";
 import { generatePhrase } from "../src/music/phrase.ts";
 import type { Chord } from "../src/types.ts";
 
@@ -101,4 +101,93 @@ Deno.test("generatePhrase: default rng is Math.random (no throw without rng arg)
     beatDur: BEAT_DUR,
   });
   assertEquals(p.length, 4);
+});
+
+Deno.test("generatePhrase: sparse style emits at most 2 notes per bar", () => {
+  const phrase = generatePhrase(PROG, {
+    currentKey: 0,
+    complexity: 1.0,
+    beatDur: BEAT_DUR,
+    phraseStyle: "sparse",
+    rng: () => 0.5,
+  });
+  for (const bar of phrase) {
+    assert(bar.length <= 2, `sparse bar exceeded 2 notes: ${bar.length}`);
+  }
+});
+
+Deno.test("generatePhrase: dense style emits at least as many notes as normal", () => {
+  const opts = {
+    currentKey: 0,
+    complexity: 0.6,
+    beatDur: BEAT_DUR,
+    rng: () => 0.5,
+  };
+  const normal = generatePhrase(PROG, opts);
+  const dense = generatePhrase(PROG, { ...opts, phraseStyle: "dense" });
+  const normalNotes = normal.reduce((a, b) => a + b.length, 0);
+  const denseNotes = dense.reduce((a, b) => a + b.length, 0);
+  assert(denseNotes >= normalNotes, `dense (${denseNotes}) < normal (${normalNotes})`);
+});
+
+Deno.test("generatePhrase: seedNote pulls bar 0 anchor to the nearest chord tone", () => {
+  // For bar 0 with currentKey=0 and min7 voicing [0,3,7,10], rootMidi=48
+  // gives chord tones (before melodyOct clamp) [48,51,55,58], which clamp
+  // into the melody register [60,79] as [60,63,67,70].
+  // Default anchor for a call bar is idx 1 → 63.
+  // With seedNote=70 the nearest chord tone is 70 itself, so the anchor
+  // should switch to 70.
+  const opts = {
+    currentKey: 0,
+    complexity: 0.5,
+    beatDur: BEAT_DUR,
+    rng: () => 0.5,
+  };
+  const noSeed = generatePhrase(PROG, opts);
+  const seeded = generatePhrase(PROG, { ...opts, seedNote: 70 });
+  assertEquals(noSeed[0][0]?.midi, 63);
+  assertEquals(seeded[0][0]?.midi, 70);
+});
+
+Deno.test("generatePhrase dense: all note beats are within [-beatDur*0.25, beatDur*4]", () => {
+  const bd = 60 / 70;
+  const prog: [Chord, Chord, Chord, Chord] = [
+    [0, "min7"],
+    [5, "min7"],
+    [8, "maj7"],
+    [3, "min7"],
+  ];
+  const phrase = generatePhrase(prog, {
+    currentKey: 0,
+    complexity: 0.8,
+    beatDur: bd,
+    phraseStyle: "dense",
+    rng: Math.random,
+  });
+  for (const bar of phrase) {
+    for (const note of bar) {
+      if (!note.anticipation) {
+        assertEquals(
+          note.beat >= 0 && note.beat < bd * 4,
+          true,
+          `beat ${note.beat} out of range`,
+        );
+      }
+    }
+  }
+});
+
+Deno.test("generatePhrase: sparse style suppresses anticipations", () => {
+  const phrase = generatePhrase(PROG, {
+    currentKey: 0,
+    complexity: 1.0,
+    beatDur: BEAT_DUR,
+    phraseStyle: "sparse",
+    rng: () => 0.01, // would normally trigger anticipation
+  });
+  for (const bar of phrase) {
+    for (const n of bar) {
+      assert(!n.anticipation, "anticipation present in sparse phrase");
+    }
+  }
 });

@@ -12,8 +12,10 @@ import { initAudio, sliderToGain } from "./audio/graph.ts";
 import {
   cycleCurrentKey,
   flushScheduler,
+  getCurrentBeatDur,
   isSchedulerRunning,
   newProgression,
+  resetImprovState,
   resetSchedulerTime,
   setCurrentBPM,
   startScheduler,
@@ -27,10 +29,16 @@ import {
   stopAmbience,
 } from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
-import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
+import { mountPianoRoll } from "./visual/piano-roll.ts";
 import { initKnobDrag, mountControls, updateKnobSvg } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
-import { applyMoodUI, mountMoodUI, setActiveMoodButton } from "./ui/mood-ui.ts";
+import {
+  applyMoodUI,
+  mountImprovUI,
+  mountMoodUI,
+  setActiveMoodButton,
+  setImprovButtonState,
+} from "./ui/mood-ui.ts";
 import { mountPlayButton, setPlayIcon, setStatusPlaying } from "./ui/play-button.ts";
 import {
   maybeShowIOSBanner,
@@ -40,7 +48,7 @@ import {
   updateMediaSessionMood,
 } from "./pwa.ts";
 import { VERSION } from "./version.ts";
-import type { AudioRefs, Mood } from "./types.ts";
+import type { AudioRefs, Mood, TrackKey } from "./types.ts";
 
 const store = createStore(initialAppState());
 let audio: AudioRefs | null = null;
@@ -58,11 +66,7 @@ mountBackground(
   () => store.get().currentMood,
   createAmplitudeReader(() => audio?.analyser ?? null),
 );
-mountAnalyserVisualiser(
-  visCanvas,
-  () => audio?.analyser ?? null,
-  () => readAccentRgb(),
-);
+mountPianoRoll(visCanvas, () => audio?.actx ?? null, () => getCurrentBeatDur());
 
 const controls = mountControls({
   store,
@@ -74,6 +78,11 @@ mountSheet();
 
 function changeMood(newMood: Mood): void {
   setActiveMoodButton(newMood);
+  if (store.get().isImprov) {
+    store.set({ isImprov: false });
+    setImprovButtonState(false);
+    resetImprovState();
+  }
   applyMoodUI(newMood);
   updateMediaSessionMood(newMood);
 
@@ -102,7 +111,8 @@ function changeMood(newMood: Mood): void {
     // their place in `audio.trackGains` so the next scheduled bar wires up
     // to them. Hiss / scratches / ambience / hum / rain are left alone —
     // they cross-fade with master.
-    for (const key of ["drums", "bass", "comp", "melody"] as const) {
+    const severKeys: readonly TrackKey[] = ["drums", "bass", "comp", "melody1", "melody2"];
+    for (const key of severKeys) {
       refs.trackGains[key].disconnect();
       const gainNode = refs.actx.createGain();
       gainNode.gain.value = 1;
@@ -131,6 +141,13 @@ function changeMood(newMood: Mood): void {
 }
 
 mountMoodUI(changeMood);
+
+mountImprovUI(() => {
+  const next = !store.get().isImprov;
+  store.set({ isImprov: next });
+  setImprovButtonState(next);
+  if (!next) resetImprovState();
+});
 
 async function toggle(): Promise<void> {
   if (!audio) {

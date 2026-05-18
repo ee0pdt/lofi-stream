@@ -233,6 +233,65 @@
         border-color: var(--warm);
         color: #1a0e04;
       }
+      /* ── Improv toggle switch (lives in the mood row) ── */
+      /* No pill container: just a label sitting next to the switch. */
+      .improv-toggle {
+        font-family:
+          'DM Mono',
+          monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.06em;
+        padding: 0 4px 0 10px;
+        color: var(--dim);
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: color 0.15s;
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        background: transparent;
+        border: none;
+      }
+      .improv-toggle:active {
+        opacity: 0.8;
+      }
+      .improv-toggle .switch-track {
+        width: 42px;
+        height: 24px;
+        border-radius: 12px;
+        background: rgba(120, 120, 128, 0.32);
+        position: relative;
+        flex-shrink: 0;
+        box-sizing: border-box;
+        transition: background 0.22s ease;
+      }
+      .improv-toggle .switch-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow:
+          0 2px 4px rgba(0, 0, 0, 0.25),
+          0 1px 1px rgba(0, 0, 0, 0.15);
+        transition: left 0.22s ease;
+        pointer-events: none;
+      }
+      .improv-toggle.active {
+        color: #e8b07a;
+      }
+      .improv-toggle.active .switch-track {
+        background: #34c759;
+      }
+      .improv-toggle.active .switch-thumb {
+        left: 20px;
+      }
 
       /* ── Skip button (still used inline next to play) ── */
       .btn-play {
@@ -605,6 +664,19 @@
           <button class="mood-btn" data-mood="cafe">café</button>
           <button class="mood-btn" data-mood="sleepy">sleepy</button>
           <button class="mood-btn" data-mood="transit">transit</button>
+          <div
+            class="improv-toggle"
+            id="improvBtn"
+            role="switch"
+            tabindex="0"
+            aria-checked="false"
+            aria-label="improv"
+          >
+            <span>improv</span>
+            <span class="switch-track" aria-hidden="true">
+              <span class="switch-thumb"></span>
+            </span>
+          </div>
         </div>
 
         <!-- Volume -->
@@ -677,13 +749,13 @@
                 <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
               </svg>
               <input class="kn-input" type="range" data-track="comp"
-                aria-label="piano" min="0" max="1" step="0.01" value="0.8"/>
+                aria-label="chords" min="0" max="1" step="0.01" value="0.8"/>
             </div>
-            <span class="kn-lbl">piano</span>
+            <span class="kn-lbl">chords</span>
             <span class="kn-val" id="val-comp">80</span>
           </div>
 
-          <div class="kn-cell" id="mx-melody">
+          <div class="kn-cell" id="mx-melody1">
             <div class="kn-wrap">
               <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
                 <circle class="kn-body" cx="26" cy="26" r="24"/>
@@ -691,11 +763,26 @@
                 <path class="kn-fill" d=""/>
                 <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
               </svg>
-              <input class="kn-input" type="range" data-track="melody"
-                aria-label="melody" min="0" max="1" step="0.01" value="0.75"/>
+              <input class="kn-input" type="range" data-track="melody1"
+                aria-label="mel 1" min="0" max="1" step="0.01" value="0.75"/>
             </div>
-            <span class="kn-lbl">melody</span>
-            <span class="kn-val" id="val-melody">75</span>
+            <span class="kn-lbl">mel 1</span>
+            <span class="kn-val" id="val-melody1">75</span>
+          </div>
+
+          <div class="kn-cell" id="mx-melody2">
+            <div class="kn-wrap">
+              <svg class="kn-svg" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="kn-body" cx="26" cy="26" r="24"/>
+                <path class="kn-track" d="M 13.27 38.73 A 18 18 0 1 1 38.73 38.73"/>
+                <path class="kn-fill" d=""/>
+                <circle class="kn-dot" cx="13.27" cy="38.73" r="3"/>
+              </svg>
+              <input class="kn-input" type="range" data-track="melody2"
+                aria-label="mel 2" min="0" max="1" step="0.01" value="0.65"/>
+            </div>
+            <span class="kn-lbl">mel 2</span>
+            <span class="kn-val" id="val-melody2">65</span>
           </div>
 
           <div class="kn-cell">

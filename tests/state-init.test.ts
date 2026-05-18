@@ -13,3 +13,8 @@ Deno.test("initialAppState: isPlaying defaults to false", () => {
 Deno.test("initialAppState: complexity mirrors rainy.complexity", () => {
   assertEquals(initialAppState().complexity, DEFAULT_SETTINGS.rainy.complexity);
 });
+
+Deno.test("initialAppState: isImprov defaults to false", () => {
+  const s = initialAppState();
+  assertEquals(s.isImprov, false);
+});

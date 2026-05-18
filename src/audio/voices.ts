@@ -22,11 +22,12 @@ export function playComp(
   bpm: number,
 ): void {
   const timbre = MOOD_META[mood].compTimbre;
-  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
-  else if (timbre === "guitar") playGuitar(audio, midi, time, dur, vel, role);
+  if (timbre === "vibraphone") {
+    playVibraphone(audio, midi, time, dur, vel, role, audio.trackGains.comp);
+  } else if (timbre === "guitar") playGuitar(audio, midi, time, dur, vel, role);
   else if (timbre === "pad") playPad(audio, midi, time, dur, vel, role, bpm);
   else if (timbre === "coldsynth") playColdsynth(audio, midi, time, dur, vel, role, bpm);
-  else playRhodes(audio, midi, time, dur, vel, role);
+  else playRhodes(audio, midi, time, dur, vel, role, audio.trackGains.comp);
 }
 
 export function playMelody(
@@ -38,11 +39,27 @@ export function playMelody(
   role: string,
   mood: Mood,
 ): void {
-  const timbre = MOOD_META[mood].melTimbre;
-  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role);
-  else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role);
-  else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role);
-  else playRhodes(audio, midi, time, dur, vel, role);
+  playMelodyTimbre(audio, midi, time, dur, vel, role, MOOD_META[mood].melTimbre, 1);
+}
+
+/** Play a melody note with an explicit timbre rather than deriving it from mood.
+ *  `voice` selects which melody bus the note routes to (1 → melody1, 2 → melody2). */
+export function playMelodyTimbre(
+  audio: AudioRefs,
+  midi: number,
+  time: number,
+  dur: number,
+  vel: number,
+  role: string,
+  timbre: import("../types.ts").Timbre,
+  voice: 1 | 2 = 1,
+): void {
+  const melBus = voice === 1 ? audio.trackGains.melody1 : audio.trackGains.melody2;
+  const melRowId = voice === 1 ? "mx-melody1" : "mx-melody2";
+  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else playRhodes(audio, midi, time, dur, vel, role, melBus, melRowId);
 }
 
 export function playBass(

@@ -11,10 +11,13 @@ export function playBell(
   dur: number,
   vel = 0.1,
   role = "rhodesComp",
+  melBus: GainNode = audio.trackGains.melody1,
+  melRowId?: string,
 ): void {
-  const { trackKey, rowId } = roleRouting(role);
+  const { rowId: defaultRow } = roleRouting(role);
+  const rowId = melRowId ?? defaultRow;
   const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
+  sp.output.connect(melBus);
   const freq = midiToFreq(midi + 12);
   const harmonics: [number, number][] = [
     [freq, 1.0],
