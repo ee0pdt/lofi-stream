@@ -157,7 +157,7 @@ export function mountPianoRoll(
 
     // Playhead at canvas centre.
     ctx!.fillStyle = PLAYHEAD_RGBA;
-    ctx!.fillRect(visW / 2 - Math.max(1, dpr / 2), 0, Math.max(1, dpr), visH);
+    ctx!.fillRect(visW / 2 - dpr / 2, 0, Math.max(1, dpr), visH);
   }
 
   frame();
