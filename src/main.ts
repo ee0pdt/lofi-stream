@@ -111,7 +111,7 @@ function changeMood(newMood: Mood): void {
     // their place in `audio.trackGains` so the next scheduled bar wires up
     // to them. Hiss / scratches / ambience / hum / rain are left alone —
     // they cross-fade with master.
-    for (const key of ["drums", "bass", "comp", "melody"] as const) {
+    for (const key of ["drums", "bass", "comp", "melody1", "melody2"] as const) {
       refs.trackGains[key].disconnect();
       const gainNode = refs.actx.createGain();
       gainNode.gain.value = 1;
