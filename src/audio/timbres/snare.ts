@@ -8,10 +8,11 @@ export function playSnare(
   time: number,
   mood: Mood,
   ghost = false,
+  velScale = 1,
 ): void {
   if (!ghost) flashRow(audio.actx, "mx-drums", time, 80);
   const moodMeta = MOOD_META[mood];
-  const vol = ghost ? 0.04 : mood === "sleepy" ? 0.09 : 0.15;
+  const vol = (ghost ? 0.04 : mood === "sleepy" ? 0.09 : 0.15) * velScale;
   const noiseBuf = noiseBuffer(audio.actx, 0.18);
   const src = audio.actx.createBufferSource();
   src.buffer = noiseBuf;

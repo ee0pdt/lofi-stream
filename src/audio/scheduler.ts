@@ -14,7 +14,12 @@ import { VOICINGS } from "../music/voicings.ts";
 import { walkingBassNotes } from "../music/bass.ts";
 import { compOct } from "../music/octaves.ts";
 import { currentSectionProg, nextFormPosition } from "../music/playhead.ts";
-import { generatePhrase, type Phrase } from "../music/phrase.ts";
+import { generatePhrase, type Phrase, type PhraseStyle } from "../music/phrase.ts";
+import {
+  advanceImprovSection,
+  type ImprovState,
+  initImprovState,
+} from "../music/improv-sequencer.ts";
 import {
   GHOST_PAT,
   HAT_PAT,
@@ -30,7 +35,7 @@ import { playHat } from "./timbres/hat.ts";
 import { playBass, playComp, playMelody } from "./voices.ts";
 import { applyMoodReverb } from "./graph.ts";
 import { pickFrom, randInt, randRange } from "./rand.ts";
-import type { AppState, AudioRefs, Form, Mood } from "../types.ts";
+import type { AppState, AudioRefs, Chord, Form, Mood } from "../types.ts";
 import type { Store } from "../store.ts";
 
 const LOOKAHEAD_S = 3.0;
@@ -47,6 +52,9 @@ let currentBPM = 75;
 let swingAmount = 0.08;
 let nextBarTime = 0;
 let timerHandle: number | null = null;
+let improvState: ImprovState = initImprovState();
+let improvBarInSection = 0;
+let lastEmittedMidi: number | null = null;
 
 const NOTES = [
   "C",
@@ -81,6 +89,9 @@ export function newProgression(
   currentProgIdx = 0;
   currentPhrase = null;
   phraseBarIdx = 0;
+  improvState = initImprovState();
+  improvBarInSection = 0;
+  lastEmittedMidi = null;
 
   const bpmSlider = document.getElementById("bpmSlider");
   if (bpmSlider instanceof HTMLInputElement) bpmSlider.value = String(currentBPM);
@@ -116,24 +127,54 @@ function advancePlayhead(): void {
   }
 }
 
+function phraseStyleFromDyn(dyn: number): PhraseStyle {
+  if (dyn < 0.25) return "sparse";
+  if (dyn > 0.65) return "dense";
+  return "normal";
+}
+
+export function resetImprovState(): void {
+  improvState = initImprovState();
+  improvBarInSection = 0;
+  lastEmittedMidi = null;
+  currentPhrase = null;
+  phraseBarIdx = 0;
+}
+
 function scheduleBar(
   audio: AudioRefs,
   store: Store<AppState>,
   barStart: number,
 ): void {
   const state = store.get();
-  const { currentMood: mood, complexity } = state;
+  const { currentMood: mood, complexity, isImprov } = state;
   const bd = beatDur(currentBPM);
 
-  const prog = currentSectionProg(currentForm, {
-    sectionIdx: formSectionIdx,
-    barInSection: formBarInSection,
-  });
+  let prog: readonly [Chord, Chord, Chord, Chord];
+  let nextProg: readonly [Chord, Chord, Chord, Chord];
+  let effectiveComplexity = complexity;
+  let dynamicLevel = 1.0;
+  let phraseStyle: PhraseStyle = "normal";
+
+  if (isImprov) {
+    prog = improvState.prog;
+    nextProg = improvState.prog; // bridge/normal both use same prog for the section
+    dynamicLevel = improvState.dynamicLevel;
+    effectiveComplexity = complexity * dynamicLevel;
+    phraseStyle = phraseStyleFromDyn(dynamicLevel);
+  } else {
+    prog = currentSectionProg(currentForm, {
+      sectionIdx: formSectionIdx,
+      barInSection: formBarInSection,
+    });
+    nextProg = prog;
+  }
+
   const progLen = prog.length;
   const barIdx = currentProgIdx % progLen;
   const [rootOffset, voicingName] = prog[barIdx];
   const nextBarIdx = (barIdx + 1) % progLen;
-  const [nextRootOffset] = prog[nextBarIdx];
+  const [nextRootOffset] = nextProg[nextBarIdx];
 
   const voicing = VOICINGS[voicingName];
   const rootMidi = 48 + ((currentKey + rootOffset) % 12);
@@ -144,14 +185,14 @@ function scheduleBar(
 
   voicing.forEach((interval, i) => {
     const midiNote = compOct(rootMidi + interval);
-    const vel = 0.11 - i * 0.015;
+    const vel = (0.11 - i * 0.015) * dynamicLevel;
     const strum = i * 0.02;
     playComp(audio, midiNote, barStart + strum, chordDur, vel, "rhodesComp", mood, currentBPM);
 
     if (
       !isPad &&
-      complexity > 0.3 &&
-      (i < voicing.length - 1 || Math.random() < complexity * 0.7)
+      effectiveComplexity > 0.3 &&
+      (i < voicing.length - 1 || Math.random() < effectiveComplexity * 0.7)
     ) {
       playComp(
         audio,
@@ -167,9 +208,9 @@ function scheduleBar(
 
     if (
       !isPad &&
-      complexity > 0.7 &&
+      effectiveComplexity > 0.7 &&
       i >= voicing.length - 2 &&
-      Math.random() < (complexity - 0.5) * 1.2
+      Math.random() < (effectiveComplexity - 0.5) * 1.2
     ) {
       playComp(
         audio,
@@ -187,16 +228,21 @@ function scheduleBar(
   if (phraseBarIdx === 0 || currentPhrase === null) {
     currentPhrase = generatePhrase(prog, {
       currentKey,
-      complexity,
+      complexity: effectiveComplexity,
       beatDur: bd,
+      phraseStyle: isImprov ? phraseStyle : undefined,
+      seedNote: isImprov ? lastEmittedMidi ?? undefined : undefined,
     });
   }
   const barMelody = currentPhrase[phraseBarIdx % currentPhrase.length];
   for (const note of barMelody) {
     const noteTime = barStart + note.beat;
     if (noteTime >= barStart - 0.01) {
-      playMelody(audio, note.midi, noteTime, note.dur, 0.17, "rhodesMel", mood);
+      playMelody(audio, note.midi, noteTime, note.dur, 0.17 * dynamicLevel, "rhodesMel", mood);
     }
+  }
+  if (barMelody.length > 0) {
+    lastEmittedMidi = barMelody[barMelody.length - 1].midi;
   }
   const nextBarMelody = currentPhrase[(phraseBarIdx + 1) % currentPhrase.length];
   if (nextBarMelody && nextBarMelody[0] && nextBarMelody[0].anticipation) {
@@ -205,7 +251,7 @@ function scheduleBar(
       nextBarMelody[0].midi,
       barStart + bd * 4 - bd * 0.25,
       nextBarMelody[0].dur,
-      0.14,
+      0.14 * dynamicLevel,
       "rhodesMel",
       mood,
     );
@@ -214,48 +260,56 @@ function scheduleBar(
 
   const bassNotes = walkingBassNotes(rootMidi, voicing, nextRoot);
   bassNotes.forEach((midiNote, i) => {
-    const vel = i === 0 ? 0.3 : 0.22;
+    const vel = (i === 0 ? 0.3 : 0.22) * dynamicLevel;
     if (mood === "sleepy" && i !== 0 && i !== 2) return;
-    if (complexity < 0.3 && i !== 0 && i !== 2) return;
-    if (complexity < 0.55 && i === 3) return;
+    if (effectiveComplexity < 0.3 && i !== 0 && i !== 2) return;
+    if (effectiveComplexity < 0.55 && i === 3) return;
     playBass(audio, midiNote, barStart + bd * i, bd * 0.88, vel, mood);
   });
 
-  if (complexity > 0.7 && Math.random() < (complexity - 0.5) * 1.2) {
+  if (effectiveComplexity > 0.7 && Math.random() < (effectiveComplexity - 0.5) * 1.2) {
     const ghostMidi = bassNotes[0];
-    playBass(audio, ghostMidi, barStart + bd * 3.5, bd * 0.3, 0.12, mood);
+    playBass(audio, ghostMidi, barStart + bd * 3.5, bd * 0.3, 0.12 * dynamicLevel, mood);
   }
 
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
 
+  const drumScale = Math.max(0.15, dynamicLevel);
+
   for (let i = 0; i < 16; i++) {
     const stepTime = swungTime(i, barStart, currentBPM, swingAmount);
 
-    if (kickPat[i]) playKick(audio, stepTime, mood);
+    if (kickPat[i]) playKick(audio, stepTime, mood, drumScale);
 
-    if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false);
+    if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false, drumScale);
 
-    if (GHOST_PAT[i] && Math.random() < complexity * 0.7) {
-      playSnare(audio, stepTime, mood, true);
+    if (GHOST_PAT[i] && Math.random() < effectiveComplexity * 0.7) {
+      playSnare(audio, stepTime, mood, true, drumScale);
     }
 
     if (HAT_PAT[i]) {
       const isQuarter = i % 4 === 0;
-      if (isQuarter || complexity > 0.35) {
+      if (isQuarter || effectiveComplexity > 0.35) {
         const vol = 0.05 + Math.random() * 0.025;
-        playHat(audio, stepTime, mood, false, vol * (isQuarter ? 1.0 : 0.6 + complexity * 0.4));
+        playHat(
+          audio,
+          stepTime,
+          mood,
+          false,
+          vol * (isQuarter ? 1.0 : 0.6 + effectiveComplexity * 0.4),
+        );
       }
     }
 
     if (
       !HAT_PAT[i] &&
-      complexity > 0.75 &&
-      Math.random() < (complexity - 0.65) * 2
+      effectiveComplexity > 0.75 &&
+      Math.random() < (effectiveComplexity - 0.65) * 2
     ) {
       playHat(audio, stepTime, mood, false, 0.025 + Math.random() * 0.02);
     }
 
-    if (OPEN_PAT[i] && mood !== "sleepy" && complexity > 0.4) {
+    if (OPEN_PAT[i] && mood !== "sleepy" && effectiveComplexity > 0.4) {
       playHat(audio, stepTime, mood, true, 0.06);
     }
   }
@@ -266,7 +320,18 @@ function tick(audio: AudioRefs, store: Store<AppState>): void {
   while (nextBarTime < audio.actx.currentTime + LOOKAHEAD_S) {
     scheduleBar(audio, store, nextBarTime);
     currentProgIdx++;
-    advancePlayhead();
+    if (store.get().isImprov) {
+      improvBarInSection++;
+      if (improvBarInSection >= improvState.barsRemaining) {
+        improvState = advanceImprovSection(improvState, store.get().currentMood);
+        improvBarInSection = 0;
+        currentPhrase = null;
+        phraseBarIdx = 0;
+        lastEmittedMidi = null;
+      }
+    } else {
+      advancePlayhead();
+    }
     nextBarTime += barDur;
   }
   timerHandle = setTimeout(() => tick(audio, store), TICK_MS);

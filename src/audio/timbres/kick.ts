@@ -2,9 +2,14 @@ import { makeSpatial, noiseBuffer } from "../graph.ts";
 import { flashRow } from "../../ui/flash.ts";
 import type { AudioRefs, Mood } from "../../types.ts";
 
-export function playKick(audio: AudioRefs, time: number, mood: Mood): void {
+export function playKick(
+  audio: AudioRefs,
+  time: number,
+  mood: Mood,
+  velScale = 1,
+): void {
   flashRow(audio.actx, "mx-drums", time, 120);
-  const vel = mood === "sleepy" ? 0.38 : 0.55;
+  const vel = (mood === "sleepy" ? 0.38 : 0.55) * velScale;
   const osc = audio.actx.createOscillator();
   const gainNode = audio.actx.createGain();
   osc.type = "sine";
@@ -22,7 +27,7 @@ export function playKick(audio: AudioRefs, time: number, mood: Mood): void {
   const src = audio.actx.createBufferSource();
   src.buffer = noiseBuf;
   const clickGain = audio.actx.createGain();
-  clickGain.gain.value = 0.1;
+  clickGain.gain.value = 0.1 * velScale;
   src.connect(clickGain);
   clickGain.connect(sp.input);
   src.start(time);
