@@ -54,9 +54,8 @@ Deno.test("advanceImprovSection: bridge uses MOOD_META[mood].improv.bridgeSubsti
     barsRemaining: 0,
   };
   const next = advanceImprovSection(start, "cafe", seq([0.6, 0.5, 0.5]));
-  if (next.sectionType === "bridge") {
-    assertEquals(next.prog, MOOD_META.cafe.improv.bridgeSubstitutions);
-  }
+  assertEquals(next.sectionType, "bridge");
+  assertEquals(next.prog, MOOD_META.cafe.improv.bridgeSubstitutions);
 });
 
 Deno.test("advanceImprovSection: dynamicLevel never exceeds mood peakDensityCap", () => {

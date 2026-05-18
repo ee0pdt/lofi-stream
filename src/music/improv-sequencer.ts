@@ -6,6 +6,7 @@
 
 import { FORMS } from "./forms.ts";
 import { MOOD_META } from "./moods.ts";
+import { DEFAULT_PROG } from "./playhead.ts";
 import type { Chord, Mood } from "../types.ts";
 
 export type SectionType = "normal" | "buildup" | "peak" | "break" | "bridge";
@@ -79,7 +80,7 @@ export function initImprovState(): ImprovState {
   return {
     sectionType: "normal",
     dynamicLevel: 0.5,
-    prog: FORMS.rainy[0].prog,
+    prog: DEFAULT_PROG,
     barsRemaining: 8,
   };
 }
