@@ -12,6 +12,7 @@ import { initAudio, sliderToGain } from "./audio/graph.ts";
 import {
   cycleCurrentKey,
   flushScheduler,
+  getCurrentBeatDur,
   isSchedulerRunning,
   newProgression,
   resetImprovState,
@@ -28,7 +29,7 @@ import {
   stopAmbience,
 } from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
-import { mountAnalyserVisualiser, readAccentRgb } from "./visual/analyser.ts";
+import { mountPianoRoll } from "./visual/piano-roll.ts";
 import { initKnobDrag, mountControls, updateKnobSvg } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
 import {
@@ -65,11 +66,7 @@ mountBackground(
   () => store.get().currentMood,
   createAmplitudeReader(() => audio?.analyser ?? null),
 );
-mountAnalyserVisualiser(
-  visCanvas,
-  () => audio?.analyser ?? null,
-  () => readAccentRgb(),
-);
+mountPianoRoll(visCanvas, () => audio?.actx ?? null, () => getCurrentBeatDur());
 
 const controls = mountControls({
   store,

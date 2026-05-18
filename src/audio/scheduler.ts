@@ -521,6 +521,11 @@ export function setCurrentBPM(bpm: number): void {
   if (trackSub) trackSub.textContent = `${NOTES[currentKey]} · ${currentBPM} bpm`;
 }
 
+/** Read the live beat duration in seconds. Used by the piano-roll viz. */
+export function getCurrentBeatDur(): number {
+  return beatDur(currentBPM);
+}
+
 /** Cycle through the 12 chromatic keys. Resets all phrase caches. */
 export function cycleCurrentKey(): void {
   currentKey = (currentKey + 1) % 12;
