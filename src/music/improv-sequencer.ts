@@ -29,7 +29,8 @@ const PROFILES: Record<SectionType, SectionProfile> = {
   normal: { minDyn: 0.4, maxDyn: 0.6, minBars: 8, maxBars: 16 },
   buildup: { minDyn: 0.6, maxDyn: 0.8, minBars: 4, maxBars: 8 },
   peak: { minDyn: 0.8, maxDyn: 1.0, minBars: 4, maxBars: 8 },
-  break: { minDyn: 0.0, maxDyn: 0.2, minBars: 2, maxBars: 4 },
+  // minDyn 0.25 so break sections stay audible (sparse/quiet, not silent).
+  break: { minDyn: 0.25, maxDyn: 0.4, minBars: 2, maxBars: 4 },
   bridge: { minDyn: 0.3, maxDyn: 0.6, minBars: 4, maxBars: 8 },
 };
 

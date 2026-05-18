@@ -79,10 +79,7 @@ export function generatePhrase(
   prog.forEach(([rootOffset, voicingName], barIdx) => {
     const voicing = VOICINGS[voicingName];
     const rootMidi = 48 + ((currentKey + rootOffset) % 12);
-    // Dense style lifts the melody up an octave so peak/buildup sections
-    // sit audibly above normal sections in register.
-    const octaveLift = style === "dense" ? 12 : 0;
-    const chordTones = voicing.map((iv) => melodyOct(rootMidi + iv) + octaveLift);
+    const chordTones = voicing.map((iv) => melodyOct(rootMidi + iv));
     const barMelody: PhraseNote[] = [];
     const isCall = barIdx < 2;
 
@@ -107,38 +104,47 @@ export function generatePhrase(
         barMelody.push({ beat: beatDur * 3, midi: tail, dur: beatDur * 1.0 });
       }
     } else if (style === "dense") {
-      // Dense bars are a running 8th-note line: 8 slots, each filled with
-      // ~80% probability. Notes are chord tones with the occasional
-      // chromatic neighbor as a passing note. This generates a true
-      // "solo line" feel rather than just sprinkling extra notes onto a
-      // sparse anchor pattern.
-      const ANCHOR_SLOT = 0; // beat 1 always plays the anchor
-      const slots = 8; // 8th-note grid
+      // Dense bars: 16th-note grid (16 slots). Mix of arpeggio runs and
+      // free chord tones. Slot 0 always plays the anchor. Direction
+      // (ascending/descending) is chosen per bar to create the feel of
+      // a deliberate run rather than random splatter.
+      const slots = 16; // 16th-note grid
+      const ascending = rng() < 0.5;
+      const sortedTones = [...chordTones].sort((a, b) => ascending ? a - b : b - a);
+      let arpIdx = 0;
+
       for (let slot = 0; slot < slots; slot++) {
-        const fillChance = slot === ANCHOR_SLOT ? 1.0 : 0.8;
-        if (rng() >= fillChance) continue;
+        const isAnchorSlot = slot === 0;
+        if (!isAnchorSlot && rng() >= 0.72) continue;
+
         let midi: number;
-        if (slot === ANCHOR_SLOT) {
+        if (isAnchorSlot) {
           midi = anchor;
-        } else if (rng() < 0.2) {
-          // Chromatic neighbor (semitone above or below a random chord tone)
+        } else if (rng() < 0.15) {
+          // Chromatic passing note — clamped to melody register
           const t = chordTones[Math.floor(rng() * chordTones.length)];
-          midi = t + (rng() < 0.5 ? 1 : -1);
+          midi = Math.max(60, Math.min(91, t + (rng() < 0.5 ? 1 : -1)));
+        } else if (rng() < 0.55) {
+          // Directed arpeggio — step through sorted chord tones
+          midi = sortedTones[arpIdx % sortedTones.length];
+          arpIdx++;
         } else {
           midi = chordTones[Math.floor(rng() * chordTones.length)];
         }
+
         barMelody.push({
-          beat: (beatDur * slot) / 2,
+          beat: (beatDur * slot) / 4, // 16th-note offset
           midi,
-          dur: beatDur * 0.42,
+          dur: beatDur * 0.21,
         });
       }
+
       // Chromatic approach into the anchor — pre-bar grace note.
       // Tagged anticipation:true so the scheduler's previous-bar
       // lookahead actually plays it.
       barMelody.unshift({
         beat: -beatDur * 0.2,
-        midi: anchor - 1,
+        midi: Math.max(60, anchor - 1),
         dur: beatDur * 0.18,
         anticipation: true,
       });

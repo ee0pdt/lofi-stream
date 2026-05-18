@@ -135,7 +135,9 @@ function advancePlayhead(): void {
  * PROFILES change.
  */
 function phraseStyleFromDyn(dyn: number): PhraseStyle {
-  if (dyn < 0.25) return "sparse";
+  // Threshold raised to 0.35 so break sections (minDyn 0.25) still get
+  // sparse style. Keep in sync with PROFILES in improv-sequencer.ts.
+  if (dyn < 0.35) return "sparse";
   if (dyn > 0.65) return "dense";
   return "normal";
 }
@@ -293,38 +295,57 @@ function scheduleBar(
   for (let i = 0; i < 16; i++) {
     const stepTime = swungTime(i, barStart, currentBPM, swingAmount);
 
-    if (kickPat[i]) playKick(audio, stepTime, mood, drumScale);
-
-    if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false, drumScale);
-
-    if (GHOST_PAT[i] && Math.random() < effectiveComplexity * 0.7) {
-      playSnare(audio, stepTime, mood, true, drumScale);
-    }
-
-    if (HAT_PAT[i]) {
-      const isQuarter = i % 4 === 0;
-      if (isQuarter || effectiveComplexity > 0.35) {
-        const vol = 0.05 + Math.random() * 0.025;
-        playHat(
-          audio,
-          stepTime,
-          mood,
-          false,
-          vol * (isQuarter ? 1.0 : 0.6 + effectiveComplexity * 0.4),
-        );
+    // Kick and snare: break sections strip down to quarter-note kick only
+    if (isImprov && phraseStyle === "sparse") {
+      // Break: kick on beats 1+3 only; snare on 2+4; no ghosts
+      if (i === 0 || i === 8) playKick(audio, stepTime, mood, drumScale * 0.8);
+      if (i === 4 || i === 12) playSnare(audio, stepTime, mood, false, drumScale * 0.7);
+    } else {
+      if (kickPat[i]) playKick(audio, stepTime, mood, drumScale);
+      if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false, drumScale);
+      if (GHOST_PAT[i] && Math.random() < effectiveComplexity * 0.7) {
+        playSnare(audio, stepTime, mood, true, drumScale);
       }
     }
 
-    if (
-      !HAT_PAT[i] &&
-      effectiveComplexity > 0.75 &&
-      Math.random() < (effectiveComplexity - 0.65) * 2
-    ) {
-      playHat(audio, stepTime, mood, false, 0.025 + Math.random() * 0.02);
-    }
-
-    if (OPEN_PAT[i] && mood !== "sleepy" && effectiveComplexity > 0.4) {
-      playHat(audio, stepTime, mood, true, 0.06);
+    // Hats: section-aware variation
+    if (isImprov && phraseStyle === "dense") {
+      // Peak/buildup: 16th-note hi-hats for double-time drive
+      const isOnBeat = i % 4 === 0;
+      const vol = isOnBeat ? 0.07 : (0.022 + Math.random() * 0.018);
+      playHat(audio, stepTime, mood, false, vol * drumScale);
+      if (OPEN_PAT[i] && mood !== "sleepy") {
+        playHat(audio, stepTime, mood, true, 0.07 * drumScale);
+      }
+    } else if (isImprov && phraseStyle === "sparse") {
+      // Break: just quiet quarter-note hats
+      if (i % 4 === 0) {
+        playHat(audio, stepTime, mood, false, 0.025 * drumScale);
+      }
+    } else {
+      if (HAT_PAT[i]) {
+        const isQuarter = i % 4 === 0;
+        if (isQuarter || effectiveComplexity > 0.35) {
+          const vol = 0.05 + Math.random() * 0.025;
+          playHat(
+            audio,
+            stepTime,
+            mood,
+            false,
+            vol * (isQuarter ? 1.0 : 0.6 + effectiveComplexity * 0.4),
+          );
+        }
+      }
+      if (
+        !HAT_PAT[i] &&
+        effectiveComplexity > 0.75 &&
+        Math.random() < (effectiveComplexity - 0.65) * 2
+      ) {
+        playHat(audio, stepTime, mood, false, 0.025 + Math.random() * 0.02);
+      }
+      if (OPEN_PAT[i] && mood !== "sleepy" && effectiveComplexity > 0.4) {
+        playHat(audio, stepTime, mood, true, 0.06);
+      }
     }
   }
 }
