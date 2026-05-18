@@ -19,6 +19,15 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     compTimbre: "rhodes",
     melTimbre: "rhodes",
     ambience: "rain",
+    improv: {
+      peakDensityCap: 0.75,
+      bridgeSubstitutions: [
+        [10, "maj7"],
+        [5, "min9"],
+        [3, "maj9"],
+        [8, "dom9"],
+      ],
+    },
   },
   late: {
     bpmRange: [65, 75],
@@ -33,6 +42,15 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     compTimbre: "vibraphone",
     melTimbre: "vibraphone",
     ambience: "traffic",
+    improv: {
+      peakDensityCap: 1.0,
+      bridgeSubstitutions: [
+        [2, "min7b5"],
+        [7, "dom9"],
+        [0, "min9"],
+        [5, "maj9"],
+      ],
+    },
   },
   cafe: {
     bpmRange: [70, 80],
@@ -47,6 +65,15 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     compTimbre: "guitar",
     melTimbre: "rhodes",
     ambience: "room",
+    improv: {
+      peakDensityCap: 1.0,
+      bridgeSubstitutions: [
+        [9, "min7"],
+        [2, "dom9"],
+        [7, "maj9"],
+        [0, "maj7"],
+      ],
+    },
   },
   sleepy: {
     bpmRange: [55, 65],
@@ -61,6 +88,15 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     compTimbre: "pad",
     melTimbre: "celesta",
     ambience: "wind",
+    improv: {
+      peakDensityCap: 0.65,
+      bridgeSubstitutions: [
+        [10, "maj9"],
+        [3, "maj7"],
+        [8, "maj7"],
+        [5, "min9"],
+      ],
+    },
   },
   transit: {
     bpmRange: [60, 70],
@@ -75,5 +111,14 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
     compTimbre: "coldsynth",
     melTimbre: "bell",
     ambience: "transit",
+    improv: {
+      peakDensityCap: 0.9,
+      bridgeSubstitutions: [
+        [10, "min7"],
+        [5, "min7b5"],
+        [8, "dom9"],
+        [3, "maj9"],
+      ],
+    },
   },
 };

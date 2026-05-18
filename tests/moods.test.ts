@@ -1,5 +1,6 @@
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assert, assertEquals } from "jsr:@std/assert@^1";
 import { MOOD_META } from "../src/music/moods.ts";
+import { VOICINGS } from "../src/music/voicings.ts";
 import type { Mood } from "../src/types.ts";
 
 const MOODS: Mood[] = ["rainy", "late", "cafe", "sleepy", "transit"];
@@ -95,4 +96,17 @@ Deno.test("MOOD_META.transit: spot-check known values", () => {
   assertEquals(m.melTimbre, "bell");
   assertEquals(m.ambience, "transit");
   assertEquals(m.names, ["platform 4", "last departure", "signal hold"]);
+});
+
+Deno.test("MOOD_META: every mood has an improv config with valid shape", () => {
+  for (const mood of Object.keys(MOOD_META) as Array<keyof typeof MOOD_META>) {
+    const cfg = MOOD_META[mood].improv;
+    assertEquals(typeof cfg.peakDensityCap, "number");
+    assert(cfg.peakDensityCap >= 0.5 && cfg.peakDensityCap <= 1.0);
+    assertEquals(cfg.bridgeSubstitutions.length, 4);
+    for (const [rootOffset, voicingName] of cfg.bridgeSubstitutions) {
+      assert(rootOffset >= 0 && rootOffset <= 11);
+      assert(voicingName in VOICINGS);
+    }
+  }
 });

@@ -49,6 +49,17 @@ export interface FormSection {
 export type Form = readonly FormSection[];
 
 /**
+ * Per-mood improv-mode configuration. Drives the improv sequencer:
+ * `peakDensityCap` clamps how loud a mood can get at peak energy, and
+ * `bridgeSubstitutions` is the alternate 4-chord progression used during
+ * bridge sections.
+ */
+export interface MoodImprovConfig {
+  readonly peakDensityCap: number;
+  readonly bridgeSubstitutions: readonly [Chord, Chord, Chord, Chord];
+}
+
+/**
  * Per-mood timbral + harmonic configuration.
  */
 export interface MoodMeta {
@@ -64,6 +75,7 @@ export interface MoodMeta {
   readonly compTimbre: Timbre;
   readonly melTimbre: Timbre;
   readonly ambience: Ambience;
+  readonly improv: MoodImprovConfig;
 }
 
 /**
