@@ -298,7 +298,16 @@ function scheduleBar(
   for (const note of leadBar) {
     const noteTime = barStart + note.beat;
     if (noteTime >= barStart - 0.01) {
-      playMelodyTimbre(audio, note.midi, noteTime, note.dur, leadVelBase, "mel", leadTimbre);
+      playMelodyTimbre(
+        audio,
+        note.midi,
+        noteTime,
+        note.dur,
+        leadVelBase,
+        "mel",
+        leadTimbre,
+        leadVoice.id,
+      );
       recordNote({
         time: noteTime,
         midi: note.midi,
@@ -313,7 +322,16 @@ function scheduleBar(
   const leadNext = leadVoice.phrase![(leadVoice.phraseBarIdx + 1) % leadVoice.phrase!.length];
   if (leadNext?.[0]?.anticipation) {
     const at = barStart + bd * 4 - bd * 0.25;
-    playMelodyTimbre(audio, leadNext[0].midi, at, leadNext[0].dur, leadVelBase * 0.82, "mel", leadTimbre);
+    playMelodyTimbre(
+      audio,
+      leadNext[0].midi,
+      at,
+      leadNext[0].dur,
+      leadVelBase * 0.82,
+      "mel",
+      leadTimbre,
+      leadVoice.id,
+    );
     recordNote({
       time: at,
       midi: leadNext[0].midi,
@@ -344,7 +362,16 @@ function scheduleBar(
     for (const note of supBar) {
       const noteTime = barStart + note.beat;
       if (noteTime >= barStart - 0.01) {
-        playMelodyTimbre(audio, note.midi, noteTime, note.dur, supVelBase, "mel", supportVoice.timbre);
+        playMelodyTimbre(
+          audio,
+          note.midi,
+          noteTime,
+          note.dur,
+          supVelBase,
+          "mel",
+          supportVoice.timbre,
+          supportVoice.id,
+        );
         recordNote({
           time: noteTime,
           midi: note.midi,
@@ -356,10 +383,20 @@ function scheduleBar(
     if (supBar.length > 0) {
       supportVoice = updateVoiceMidi(supportVoice, supBar[supBar.length - 1].midi);
     }
-    const supNext = supportVoice.phrase![(supportVoice.phraseBarIdx + 1) % supportVoice.phrase!.length];
+    const supNext =
+      supportVoice.phrase![(supportVoice.phraseBarIdx + 1) % supportVoice.phrase!.length];
     if (supNext?.[0]?.anticipation) {
       const at = barStart + bd * 4 - bd * 0.25;
-      playMelodyTimbre(audio, supNext[0].midi, at, supNext[0].dur, supVelBase * 0.82, "mel", supportVoice.timbre);
+      playMelodyTimbre(
+        audio,
+        supNext[0].midi,
+        at,
+        supNext[0].dur,
+        supVelBase * 0.82,
+        "mel",
+        supportVoice.timbre,
+        supportVoice.id,
+      );
       recordNote({
         time: at,
         midi: supNext[0].midi,

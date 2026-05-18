@@ -11,10 +11,11 @@ export function playVibraphone(
   dur: number,
   vel = 0.14,
   role = "rhodesComp",
+  melBus: GainNode = audio.trackGains.melody1,
 ): void {
-  const { trackKey, rowId } = roleRouting(role);
+  const { rowId } = roleRouting(role);
   const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
+  sp.output.connect(melBus);
   const freq = midiToFreq(midi);
   [
     [freq, 0.9],

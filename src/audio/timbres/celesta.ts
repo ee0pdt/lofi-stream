@@ -13,8 +13,9 @@ export function playCelesta(
   dur: number,
   vel = 0.1,
   role = "rhodesComp",
+  melBus: GainNode = audio.trackGains.melody1,
 ): void {
-  const { trackKey, rowId } = roleRouting(role);
+  const { rowId } = roleRouting(role);
   flashRow(audio.actx, rowId, time, 90);
   const freq = midiToFreq(midi + 12);
   const osc = audio.actx.createOscillator();
@@ -34,10 +35,10 @@ export function playCelesta(
   const sp = makeHaasSpatial(audio, role);
   osc.connect(gainNode);
   gainNode.connect(sp.input);
-  sp.output.connect(audio.trackGains[trackKey]);
+  sp.output.connect(melBus);
   gainNode.connect(reverbGain);
   reverbGain.connect(reverb2);
-  reverb2.connect(audio.trackGains[trackKey]);
+  reverb2.connect(melBus);
   osc.start(time);
   osc.stop(time + Math.min(dur, 1.3));
 }

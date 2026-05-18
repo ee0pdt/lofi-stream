@@ -11,10 +11,11 @@ export function playRhodes(
   dur: number,
   vel = 0.16,
   role = "rhodesComp",
+  melBus: GainNode = audio.trackGains.melody1,
 ): void {
-  const { trackKey, rowId } = roleRouting(role);
+  const { rowId } = roleRouting(role);
   const sp = makeHaasSpatial(audio, role);
-  sp.output.connect(audio.trackGains[trackKey]);
+  sp.output.connect(melBus);
   const partials: ReadonlyArray<readonly [number, OscillatorType]> = [
     [midiToFreq(midi), "sine"],
     [midiToFreq(midi) * 1.004, "sine"],
