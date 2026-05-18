@@ -119,6 +119,23 @@ export interface AppState {
 }
 
 /**
+ * Per-track gain bus keys. Each maps to a `GainNode` in `AudioRefs.trackGains`.
+ * The set is exhaustive — any code that indexes `trackGains` must use one of
+ * these strings, which catches drift between the mixer and the audio graph at
+ * compile time.
+ */
+export type TrackKey =
+  | "drums"
+  | "bass"
+  | "comp"
+  | "melody1"
+  | "melody2"
+  | "hiss"
+  | "scratches"
+  | "ambience"
+  | "hum";
+
+/**
  * Bag of audio node references built by `initAudio`. Owned by
  * `src/audio/graph.ts` and passed explicitly to scheduler, UI, and the
  * cascade wirers.
@@ -133,7 +150,7 @@ export interface AudioRefs {
   readonly wetGain: GainNode;
   readonly convolver: ConvolverNode;
   readonly analyser: AnalyserNode;
-  readonly trackGains: Record<string, GainNode>;
+  readonly trackGains: Record<TrackKey, GainNode>;
   readonly warpModGain: GainNode;
   readonly humGain: GainNode;
   readonly ambienceGain: GainNode;

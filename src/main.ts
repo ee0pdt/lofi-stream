@@ -48,7 +48,7 @@ import {
   updateMediaSessionMood,
 } from "./pwa.ts";
 import { VERSION } from "./version.ts";
-import type { AudioRefs, Mood } from "./types.ts";
+import type { AudioRefs, Mood, TrackKey } from "./types.ts";
 
 const store = createStore(initialAppState());
 let audio: AudioRefs | null = null;
@@ -111,7 +111,8 @@ function changeMood(newMood: Mood): void {
     // their place in `audio.trackGains` so the next scheduled bar wires up
     // to them. Hiss / scratches / ambience / hum / rain are left alone —
     // they cross-fade with master.
-    for (const key of ["drums", "bass", "comp", "melody1", "melody2"] as const) {
+    const severKeys: readonly TrackKey[] = ["drums", "bass", "comp", "melody1", "melody2"];
+    for (const key of severKeys) {
       refs.trackGains[key].disconnect();
       const gainNode = refs.actx.createGain();
       gainNode.gain.value = 1;
