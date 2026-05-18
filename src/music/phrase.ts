@@ -106,6 +106,42 @@ export function generatePhrase(
         const tail = chordTones[2] ?? chordTones[0];
         barMelody.push({ beat: beatDur * 3, midi: tail, dur: beatDur * 1.0 });
       }
+    } else if (style === "dense") {
+      // Dense bars are a running 8th-note line: 8 slots, each filled with
+      // ~80% probability. Notes are chord tones with the occasional
+      // chromatic neighbor as a passing note. This generates a true
+      // "solo line" feel rather than just sprinkling extra notes onto a
+      // sparse anchor pattern.
+      const ANCHOR_SLOT = 0; // beat 1 always plays the anchor
+      const slots = 8; // 8th-note grid
+      for (let slot = 0; slot < slots; slot++) {
+        const fillChance = slot === ANCHOR_SLOT ? 1.0 : 0.8;
+        if (rng() >= fillChance) continue;
+        let midi: number;
+        if (slot === ANCHOR_SLOT) {
+          midi = anchor;
+        } else if (rng() < 0.2) {
+          // Chromatic neighbor (semitone above or below a random chord tone)
+          const t = chordTones[Math.floor(rng() * chordTones.length)];
+          midi = t + (rng() < 0.5 ? 1 : -1);
+        } else {
+          midi = chordTones[Math.floor(rng() * chordTones.length)];
+        }
+        barMelody.push({
+          beat: (beatDur * slot) / 2,
+          midi,
+          dur: beatDur * 0.42,
+        });
+      }
+      // Chromatic approach into the anchor — pre-bar grace note.
+      // Tagged anticipation:true so the scheduler's previous-bar
+      // lookahead actually plays it.
+      barMelody.unshift({
+        beat: -beatDur * 0.2,
+        midi: anchor - 1,
+        dur: beatDur * 0.18,
+        anticipation: true,
+      });
     } else {
       // normal + dense share the existing core; dense layers extra notes.
       if (complexity > 0.15 || isCall) {
@@ -136,49 +172,7 @@ export function generatePhrase(
         });
       }
 
-      if (style === "dense") {
-        // Chromatic approach: a semitone below the anchor, 1/16 note,
-        // landing just before beat 1. Only meaningful when the anchor
-        // actually played. Tagged `anticipation: true` so the scheduler's
-        // existing previous-bar lookahead picks it up (negative beats are
-        // otherwise filtered out by the current-bar window).
-        if (barMelody.length > 0 && barMelody[0].beat === 0) {
-          barMelody.unshift({
-            beat: -beatDur * 0.18,
-            midi: anchor - 1,
-            dur: beatDur * 0.15,
-            anticipation: true,
-          });
-        }
-        // Extra mid-bar passing note — high probability so dense feels busy.
-        if (rng() < 0.85) {
-          const passing = chordTones[Math.floor(rng() * chordTones.length)];
-          barMelody.push({
-            beat: beatDur * (isCall ? 2.25 : 2.75),
-            midi: passing,
-            dur: beatDur * 0.4,
-          });
-        }
-        // Bar-end 16th-note fill: 2 quick chord-tone notes leading up to
-        // the next bar. Adds the "running line" feel that peak sections
-        // need to register as a high-energy moment.
-        if (rng() < 0.7) {
-          const fillA = chordTones[Math.floor(rng() * chordTones.length)];
-          const fillB = chordTones[Math.floor(rng() * chordTones.length)];
-          barMelody.push({
-            beat: beatDur * 3.5,
-            midi: fillA,
-            dur: beatDur * 0.22,
-          });
-          barMelody.push({
-            beat: beatDur * 3.75,
-            midi: fillB,
-            dur: beatDur * 0.22,
-          });
-        }
-      }
-
-      // Anticipation pushback (suppressed in sparse handled above)
+      // Anticipation pushback
       if (rng() < complexity * 0.6 && lastNote !== null && barMelody.length > 0) {
         const first = barMelody[0];
         if (first.beat >= 0) {

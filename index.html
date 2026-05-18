@@ -248,7 +248,10 @@
         cursor: pointer;
         white-space: nowrap;
         flex-shrink: 0;
-        transition: color 0.15s, background 0.15s, border-color 0.15s;
+        transition:
+          color 0.15s,
+          background 0.15s,
+          border-color 0.15s;
         min-height: 34px;
         display: inline-flex;
         align-items: center;
@@ -259,38 +262,43 @@
       .improv-toggle:active {
         opacity: 0.8;
       }
-      .improv-toggle .switch {
-        width: 26px;
-        height: 14px;
-        border-radius: 8px;
+      .improv-toggle .switch-track {
+        width: 28px;
+        height: 16px;
+        border-radius: 10px;
         background: rgba(255, 255, 255, 0.08);
         border: 1px solid var(--border);
         position: relative;
         flex-shrink: 0;
-        transition: background 0.18s, border-color 0.18s;
+        box-sizing: border-box;
+        transition:
+          background 0.18s,
+          border-color 0.18s;
       }
-      .improv-toggle .switch::before {
-        content: "";
+      .improv-toggle .switch-thumb {
         position: absolute;
         top: 1px;
         left: 1px;
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
         background: var(--dim);
-        transition: transform 0.18s, background 0.18s;
+        transition:
+          left 0.18s ease,
+          background 0.18s;
+        pointer-events: none;
       }
       .improv-toggle.active {
         background: rgba(216, 168, 109, 0.12);
         border-color: #d8a86d;
         color: #e8b07a;
       }
-      .improv-toggle.active .switch {
+      .improv-toggle.active .switch-track {
         background: #d8a86d;
         border-color: #d8a86d;
       }
-      .improv-toggle.active .switch::before {
-        transform: translateX(12px);
+      .improv-toggle.active .switch-thumb {
+        left: 13px;
         background: #1a0e04;
       }
 
@@ -674,7 +682,9 @@
             aria-label="improv"
           >
             <span>improv</span>
-            <span class="switch" aria-hidden="true"></span>
+            <span class="switch-track" aria-hidden="true">
+              <span class="switch-thumb"></span>
+            </span>
           </div>
         </div>
 
