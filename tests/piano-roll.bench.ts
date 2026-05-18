@@ -78,7 +78,7 @@ globalThis.requestAnimationFrame =
 
 const canvas = makeMockCanvas(1920, 1080);
 const fakeActx = { currentTime: 0 } as AudioContext;
-mountPianoRoll(canvas, () => fakeActx, () => 0.5);
+mountPianoRoll(canvas, () => fakeActx, () => 0.5, () => "rainy");
 
 // Restore rAF — the bench drives the renderer directly via __renderFrameForTest.
 globalThis.requestAnimationFrame = origRaf;

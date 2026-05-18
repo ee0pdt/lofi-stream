@@ -138,7 +138,7 @@ Deno.test("piano-roll: pruneOlderThan drops notes ending before cutoff", () => {
 Deno.test("piano-roll: clear() empties buffer and wipes canvas", () => {
   __resetPianoRollForTest();
   const { canvas, mock } = makeMockCanvas(800, 600);
-  const roll = mountPianoRoll(canvas, () => null, () => 0.5);
+  const roll = mountPianoRoll(canvas, () => null, () => 0.5, () => "rainy");
   recordNote({ time: 0, midi: 60, dur: 0.5, voice: "mel1" });
   recordNote({ time: 1, midi: 64, dur: 0.5, voice: "mel2" });
   assertEquals(__snapshotPianoRollForTest().length, 2);
@@ -166,7 +166,7 @@ Deno.test("piano-roll: pause() cancels pending rAF after play()", () => {
     assertEquals(h, lastHandle);
   }) as typeof cancelAnimationFrame;
   try {
-    const roll = mountPianoRoll(canvas, () => null, () => 0.5);
+    const roll = mountPianoRoll(canvas, () => null, () => 0.5, () => "rainy");
     const before = rafCalls;
     roll.play();
     assert(rafCalls > before, "play() should schedule a rAF");
@@ -194,21 +194,21 @@ Deno.test("piano-roll: batched draw writes voice fillStyle exactly once", () => 
   try {
     // Force a fake audio context so getAudioCtx() returns a stable now.
     const fakeActx = { currentTime: 0 } as AudioContext;
-    mountPianoRoll(canvas, () => fakeActx, () => 0.5);
+    mountPianoRoll(canvas, () => fakeActx, () => 0.5, () => "rainy");
     // Five mel1 notes inside the visible window (halfSec = 8 * 0.5 = 4s).
     for (let i = 0; i < 5; i++) {
       recordNote({ time: i * 0.2, midi: 60 + i, dur: 0.3, voice: "mel1" });
     }
     mock.reset();
     __renderFrameForTest();
-    // Among all fillStyle writes this frame, the mel1 colour (232,122,107)
-    // should appear exactly once — proving §5.3 batching.
-    const mel1Writes = mock.calls.fillStyleSets.filter((s) => s.includes("232,122,107"));
+    // Among all fillStyle writes this frame, the rainy-palette mel1 colour
+    // (184,212,240) should appear exactly once — proving §5.3 batching.
+    const mel1Writes = mock.calls.fillStyleSets.filter((s) => s.includes("184,212,240"));
     assertEquals(mel1Writes.length, 1, "mel1 fillStyle must be set exactly once");
     // No other voice colour should appear (no other notes recorded).
-    const chordsWrites = mock.calls.fillStyleSets.filter((s) => s.includes("212,164,86"));
-    const bassWrites = mock.calls.fillStyleSets.filter((s) => s.includes("122,95,184"));
-    const mel2Writes = mock.calls.fillStyleSets.filter((s) => s.includes("95,184,168"));
+    const chordsWrites = mock.calls.fillStyleSets.filter((s) => s.includes("138,184,216"));
+    const bassWrites = mock.calls.fillStyleSets.filter((s) => s.includes("107,111,184"));
+    const mel2Writes = mock.calls.fillStyleSets.filter((s) => s.includes("122,200,200"));
     assertEquals(chordsWrites.length, 0);
     assertEquals(bassWrites.length, 0);
     assertEquals(mel2Writes.length, 0);

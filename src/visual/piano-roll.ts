@@ -7,6 +7,8 @@
  * by voice colour, and the render loop runs only between play/pause.
  */
 
+import type { Mood } from "../types.ts";
+
 export type RollVoice = "chords" | "bass" | "mel1" | "mel2";
 
 export interface RollNote {
@@ -101,12 +103,41 @@ interface VoiceStyle {
   readonly b: number;
 }
 
+// Per-mood voice palettes. Each set is hand-tuned to harmonise with the
+// gaussian background in `canvas2d.ts` MOOD_PALETTE for that mood, while
+// keeping the four voices distinguishable under additive blend.
 // Base alpha is 0.45 (down from 0.70) to compensate for additive blending.
-const VOICE_RGB: Record<RollVoice, VoiceStyle> = {
-  chords: { r: 212, g: 164, b: 86 }, // amber
-  bass: { r: 122, g: 95, b: 184 }, // deep purple
-  mel1: { r: 232, g: 122, b: 107 }, // coral
-  mel2: { r: 95, g: 184, b: 168 }, // teal
+const MOOD_VOICE_RGB: Record<Mood, Record<RollVoice, VoiceStyle>> = {
+  rainy: {
+    chords: { r: 138, g: 184, b: 216 }, // steel blue
+    bass: { r: 107, g: 111, b: 184 }, // indigo
+    mel1: { r: 184, g: 212, b: 240 }, // ice
+    mel2: { r: 122, g: 200, b: 200 }, // soft cyan
+  },
+  late: {
+    chords: { r: 184, g: 155, b: 208 }, // muted violet
+    bass: { r: 142, g: 122, b: 200 }, // periwinkle
+    mel1: { r: 230, g: 163, b: 208 }, // rose
+    mel2: { r: 168, g: 176, b: 224 }, // lavender
+  },
+  cafe: {
+    chords: { r: 212, g: 164, b: 86 }, // amber
+    bass: { r: 184, g: 106, b: 72 }, // burnt sienna
+    mel1: { r: 232, g: 150, b: 122 }, // peach
+    mel2: { r: 224, g: 200, b: 128 }, // straw
+  },
+  sleepy: {
+    chords: { r: 128, g: 184, b: 184 }, // muted teal
+    bass: { r: 90, g: 140, b: 174 }, // slate blue
+    mel1: { r: 168, g: 208, b: 204 }, // seafoam
+    mel2: { r: 152, g: 192, b: 208 }, // sky
+  },
+  transit: {
+    chords: { r: 200, g: 112, b: 208 }, // orchid
+    bass: { r: 128, g: 80, b: 176 }, // royal purple
+    mel1: { r: 224, g: 122, b: 176 }, // neon pink
+    mel2: { r: 128, g: 160, b: 224 }, // electric blue
+  },
 };
 const VOICE_ORDER: readonly RollVoice[] = ["chords", "bass", "mel1", "mel2"];
 const BASE_ALPHA = 0.45;
@@ -126,6 +157,7 @@ export function mountPianoRoll(
   canvas: HTMLCanvasElement,
   getAudioCtx: () => AudioContext | null,
   getBeatDur: () => number,
+  getMood: () => Mood,
 ): PianoRoll {
   const ctx = canvas.getContext("2d") as Ctx2D | null;
   // Even if the 2D context is unavailable, return a no-op PianoRoll so
@@ -290,12 +322,14 @@ export function mountPianoRoll(
     // batched at one write per voice as §5.3 specifies.
     const r2 = 1.5 * dpr;
     const cheapThresh = 4 * dpr;
+    // Mood palette is read once per frame; mood only changes on user click.
+    const palette = MOOD_VOICE_RGB[getMood()] ?? MOOD_VOICE_RGB.rainy;
     for (let v = 0; v < 4; v++) {
       const voice = VOICE_ORDER[v];
       const n = counts[v];
       if (n === 0) continue;
       const bucket = bucketFor(voice);
-      const rgb = VOICE_RGB[voice];
+      const rgb = palette[voice];
       ctx!.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},1)`;
       for (let j = 0; j < n; j++) {
         const note = buffer[bucket[j]];

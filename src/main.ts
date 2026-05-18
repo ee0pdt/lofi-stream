@@ -70,6 +70,7 @@ const pianoRoll: PianoRoll = mountPianoRoll(
   visCanvas,
   () => audio?.actx ?? null,
   () => getCurrentBeatDur(),
+  () => store.get().currentMood,
 );
 
 const controls = mountControls({
