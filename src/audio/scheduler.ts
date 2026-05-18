@@ -36,6 +36,7 @@ import { playKick } from "./timbres/kick.ts";
 import { playSnare } from "./timbres/snare.ts";
 import { playHat } from "./timbres/hat.ts";
 import { playBass, playComp, playMelody, playMelodyTimbre } from "./voices.ts";
+import { recordNote } from "../visual/piano-roll.ts";
 import { applyMoodReverb } from "./graph.ts";
 import { pickFrom, randInt, randRange } from "./rand.ts";
 import type { AppState, AudioRefs, Chord, Form, Mood } from "../types.ts";
@@ -214,6 +215,7 @@ function scheduleBar(
     const vel = (0.11 - i * 0.015) * compVelScale;
     const strum = i * 0.02;
     playComp(audio, midiNote, barStart + strum, chordDur, vel, "rhodesComp", mood, currentBPM);
+    recordNote({ time: barStart + strum, midi: midiNote, dur: chordDur, voice: "chords" });
 
     if (
       !isPad &&
@@ -230,6 +232,12 @@ function scheduleBar(
         mood,
         currentBPM,
       );
+      recordNote({
+        time: barStart + bd * 2 + strum * 0.5,
+        midi: midiNote,
+        dur: chordDur * 0.85,
+        voice: "chords",
+      });
     }
 
     if (
@@ -248,6 +256,12 @@ function scheduleBar(
         mood,
         currentBPM,
       );
+      recordNote({
+        time: barStart + bd * 1.5 + strum * 0.3,
+        midi: midiNote,
+        dur: bd * 0.4,
+        voice: "chords",
+      });
     }
   });
 
@@ -266,6 +280,7 @@ function scheduleBar(
     const noteTime = barStart + note.beat;
     if (noteTime >= barStart - 0.01) {
       playMelody(audio, note.midi, noteTime, note.dur, 0.17, "rhodesMel", mood);
+      recordNote({ time: noteTime, midi: note.midi, dur: note.dur, voice: "mel1" });
     }
   }
   if (baseBarMelody.length > 0) baseLastMidi = baseBarMelody[baseBarMelody.length - 1].midi;
@@ -280,6 +295,12 @@ function scheduleBar(
       "rhodesMel",
       mood,
     );
+    recordNote({
+      time: barStart + bd * 4 - bd * 0.25,
+      midi: baseNext[0].midi,
+      dur: baseNext[0].dur,
+      voice: "mel1",
+    });
   }
   basePhraseBarIdx++;
 
@@ -317,6 +338,7 @@ function scheduleBar(
           const noteTime = barStart + note.beat;
           if (noteTime >= barStart - 0.01) {
             playMelodyTimbre(audio, note.midi, noteTime, note.dur, vel, "mel", lane.def.timbre);
+            recordNote({ time: noteTime, midi: note.midi, dur: note.dur, voice: "mel2" });
           }
         }
         const nextBarMelody = lane.phrase[(lane.phraseBarIdx + 1) % lane.phrase.length];
@@ -330,6 +352,12 @@ function scheduleBar(
             "mel",
             lane.def.timbre,
           );
+          recordNote({
+            time: barStart + bd * 4 - bd * 0.25,
+            midi: nextBarMelody[0].midi,
+            dur: nextBarMelody[0].dur,
+            voice: "mel2",
+          });
         }
         const lastNote = barMelody[barMelody.length - 1];
         lane = updateLaneMidi(lane, lastNote?.midi ?? null);
@@ -348,11 +376,13 @@ function scheduleBar(
     if (effectiveComplexity < 0.3 && i !== 0 && i !== 2) return;
     if (effectiveComplexity < 0.55 && i === 3) return;
     playBass(audio, midiNote, barStart + bd * i, bd * 0.88, vel, mood);
+    recordNote({ time: barStart + bd * i, midi: midiNote, dur: bd * 0.88, voice: "bass" });
   });
 
   if (effectiveComplexity > 0.7 && Math.random() < (effectiveComplexity - 0.5) * 1.2) {
     const ghostMidi = bassNotes[0];
     playBass(audio, ghostMidi, barStart + bd * 3.5, bd * 0.3, 0.12 * bassVelScale, mood);
+    recordNote({ time: barStart + bd * 3.5, midi: ghostMidi, dur: bd * 0.3, voice: "bass" });
   }
 
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
