@@ -46,6 +46,13 @@ export function mountImprovUI(onToggle: () => void): void {
   const btn = document.getElementById("improvBtn");
   if (!btn) return;
   btn.addEventListener("click", onToggle);
+  btn.addEventListener("keydown", (e) => {
+    const k = (e as KeyboardEvent).key;
+    if (k === " " || k === "Enter") {
+      e.preventDefault();
+      onToggle();
+    }
+  });
 }
 
 /** Toggle the "active" class on the mood button matching `mood`. */
@@ -60,4 +67,5 @@ export function setImprovButtonState(active: boolean): void {
   const btn = document.getElementById("improvBtn");
   if (!btn) return;
   btn.classList.toggle("active", active);
+  btn.setAttribute("aria-checked", active ? "true" : "false");
 }

@@ -233,11 +233,65 @@
         border-color: var(--warm);
         color: #1a0e04;
       }
-      .improv-btn.active {
+      /* ── Improv toggle switch (lives in the mood row) ── */
+      .improv-toggle {
+        font-family:
+          'DM Mono',
+          monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.06em;
+        padding: 7px 12px 7px 10px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--dim);
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .improv-toggle:active {
+        opacity: 0.8;
+      }
+      .improv-toggle .switch {
+        width: 26px;
+        height: 14px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--border);
+        position: relative;
+        flex-shrink: 0;
+        transition: background 0.18s, border-color 0.18s;
+      }
+      .improv-toggle .switch::before {
+        content: "";
+        position: absolute;
+        top: 1px;
+        left: 1px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--dim);
+        transition: transform 0.18s, background 0.18s;
+      }
+      .improv-toggle.active {
+        background: rgba(216, 168, 109, 0.12);
+        border-color: #d8a86d;
+        color: #e8b07a;
+      }
+      .improv-toggle.active .switch {
         background: #d8a86d;
         border-color: #d8a86d;
-        color: #1a0e04;
-        box-shadow: 0 0 14px color-mix(in srgb, #d8a86d 35%, transparent);
+      }
+      .improv-toggle.active .switch::before {
+        transform: translateX(12px);
+        background: #1a0e04;
       }
 
       /* ── Skip button (still used inline next to play) ── */
@@ -611,7 +665,17 @@
           <button class="mood-btn" data-mood="cafe">café</button>
           <button class="mood-btn" data-mood="sleepy">sleepy</button>
           <button class="mood-btn" data-mood="transit">transit</button>
-          <button class="mood-btn improv-btn" id="improvBtn">improv</button>
+          <div
+            class="improv-toggle"
+            id="improvBtn"
+            role="switch"
+            tabindex="0"
+            aria-checked="false"
+            aria-label="improv"
+          >
+            <span>improv</span>
+            <span class="switch" aria-hidden="true"></span>
+          </div>
         </div>
 
         <!-- Volume -->
