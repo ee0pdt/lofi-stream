@@ -73,6 +73,14 @@
         z-index: 0;
       }
 
+      /* ── Piano-roll visualiser canvas ── */
+      #vis {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+      }
+
       /* ── Bottom sheet ── */
       .sheet {
         position: fixed;
@@ -178,20 +186,6 @@
         letter-spacing: 0.12em;
         text-transform: uppercase;
         margin-top: 2px;
-      }
-
-      /* ── Visualiser ── */
-      .wave-wrap {
-        margin: 4px -20px 2px;
-        height: 56px;
-        overflow: hidden;
-        background: rgba(0, 0, 0, 0.18);
-        position: relative;
-      }
-      #vis {
-        display: block;
-        width: 100%;
-        height: 56px;
       }
 
       /* ── Mood row ── */
@@ -623,6 +617,7 @@
     <!-- Generative background -->
 
     <canvas id="bg"></canvas>
+    <canvas id="vis"></canvas>
 
     <!-- Bottom sheet -->
 
@@ -650,11 +645,6 @@
             <span class="key-val" id="keyVal">&mdash;</span>
             <span class="key-lbl">key</span>
           </div>
-        </div>
-
-        <!-- Waveform -->
-        <div class="wave-wrap">
-          <canvas id="vis" width="400" height="56"></canvas>
         </div>
 
         <!-- Mood -->
