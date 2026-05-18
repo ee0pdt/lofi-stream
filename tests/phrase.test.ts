@@ -149,6 +149,34 @@ Deno.test("generatePhrase: seedNote pulls bar 0 anchor to the nearest chord tone
   assertEquals(seeded[0][0]?.midi, 70);
 });
 
+Deno.test("generatePhrase dense: all note beats are within [-beatDur*0.25, beatDur*4]", () => {
+  const bd = 60 / 70;
+  const prog: [Chord, Chord, Chord, Chord] = [
+    [0, "min7"],
+    [5, "min7"],
+    [8, "maj7"],
+    [3, "min7"],
+  ];
+  const phrase = generatePhrase(prog, {
+    currentKey: 0,
+    complexity: 0.8,
+    beatDur: bd,
+    phraseStyle: "dense",
+    rng: Math.random,
+  });
+  for (const bar of phrase) {
+    for (const note of bar) {
+      if (!note.anticipation) {
+        assertEquals(
+          note.beat >= 0 && note.beat < bd * 4,
+          true,
+          `beat ${note.beat} out of range`,
+        );
+      }
+    }
+  }
+});
+
 Deno.test("generatePhrase: sparse style suppresses anticipations", () => {
   const phrase = generatePhrase(PROG, {
     currentKey: 0,

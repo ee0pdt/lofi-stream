@@ -115,7 +115,7 @@ export const MOOD_META: Record<Mood, MoodMeta> = {
       peakDensityCap: 0.9,
       bridgeSubstitutions: [
         [10, "min7"],
-        [5, "min7b5"],
+        [5, "min7"], // was min7b5 — tritone clashed with cold-synth reverb
         [8, "dom9"],
         [3, "maj9"],
       ],

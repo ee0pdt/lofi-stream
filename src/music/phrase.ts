@@ -104,18 +104,32 @@ export function generatePhrase(
         barMelody.push({ beat: beatDur * 3, midi: tail, dur: beatDur * 1.0 });
       }
     } else if (style === "dense") {
-      // Dense bars: 16th-note grid (16 slots). Mix of arpeggio runs and
-      // free chord tones. Slot 0 always plays the anchor. Direction
-      // (ascending/descending) is chosen per bar to create the feel of
-      // a deliberate run rather than random splatter.
-      const slots = 16; // 16th-note grid
+      // Dense bars: 48-slot grid (1 slot = 1/12 of a beat).
+      // Enables both 16th-notes (every 3 slots, s % 3 === 0) and
+      // 8th-note triplets (every 8 slots, s % 8 === 0).
+      // Slot 0 always plays the anchor. Direction (ascending/descending)
+      // is chosen per bar to create the feel of a deliberate run rather
+      // than random splatter.
+      const SLOTS = 48;
       const ascending = rng() < 0.5;
       const sortedTones = [...chordTones].sort((a, b) => ascending ? a - b : b - a);
       let arpIdx = 0;
 
-      for (let slot = 0; slot < slots; slot++) {
+      for (let slot = 0; slot < SLOTS; slot++) {
         const isAnchorSlot = slot === 0;
-        if (!isAnchorSlot && rng() >= 0.72) continue;
+
+        if (!isAnchorSlot) {
+          // Jazz-position-aware fill probability
+          let fillProb: number;
+          if (slot % 3 === 0) {
+            fillProb = 0.55; // 16th-note positions
+          } else if (slot % 8 === 0) {
+            fillProb = 0.45; // 8th-note triplet positions
+          } else {
+            fillProb = 0.20; // off-grid slots
+          }
+          if (rng() > fillProb) continue;
+        }
 
         let midi: number;
         if (isAnchorSlot) {
@@ -133,9 +147,9 @@ export function generatePhrase(
         }
 
         barMelody.push({
-          beat: (beatDur * slot) / 4, // 16th-note offset
+          beat: (beatDur * slot) / 12, // 12 slots = 1 beat
           midi,
-          dur: beatDur * 0.21,
+          dur: beatDur * 0.25,
         });
       }
 
@@ -149,9 +163,23 @@ export function generatePhrase(
         anticipation: true,
       });
     } else {
-      // normal + dense share the existing core; dense layers extra notes.
+      // normal style: anchor + color notes. Occasionally inserts a short
+      // 8th-note triplet run (3 notes at triplet spacing) for jazz feel.
       if (complexity > 0.15 || isCall) {
         barMelody.push({ beat: 0, midi: anchor, dur: beatDur * 0.85 });
+      }
+
+      // 20% chance of a triplet run on beats 1-2 (slots 0, 8, 16 of bar)
+      if (rng() < 0.20) {
+        const tripletSpacing = (beatDur * 8) / 12; // 8th-note triplet interval
+        for (let t = 0; t < 3; t++) {
+          const tripletMidi = chordTones[t % chordTones.length];
+          barMelody.push({
+            beat: tripletSpacing * t,
+            midi: tripletMidi,
+            dur: beatDur * 0.35,
+          });
+        }
       }
 
       if (rng() < 0.1 + complexity * 0.7) {

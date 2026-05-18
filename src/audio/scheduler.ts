@@ -15,11 +15,7 @@ import { walkingBassNotes } from "../music/bass.ts";
 import { compOct } from "../music/octaves.ts";
 import { currentSectionProg, nextFormPosition } from "../music/playhead.ts";
 import { generatePhrase, type Phrase, type PhraseStyle } from "../music/phrase.ts";
-import {
-  advanceImprovSection,
-  type ImprovState,
-  initImprovState,
-} from "../music/improv-sequencer.ts";
+import { type EnergyState, initEnergyState, stepEnergyState } from "../music/improv-energy.ts";
 import {
   GHOST_PAT,
   HAT_PAT,
@@ -52,8 +48,7 @@ let currentBPM = 75;
 let swingAmount = 0.08;
 let nextBarTime = 0;
 let timerHandle: number | null = null;
-let improvState: ImprovState = initImprovState();
-let improvBarInSection = 0;
+let energyState: EnergyState = initEnergyState("rainy");
 let lastEmittedMidi: number | null = null;
 
 const NOTES = [
@@ -89,8 +84,7 @@ export function newProgression(
   currentProgIdx = 0;
   currentPhrase = null;
   phraseBarIdx = 0;
-  improvState = initImprovState();
-  improvBarInSection = 0;
+  energyState = initEnergyState(mood);
   lastEmittedMidi = null;
 
   const bpmSlider = document.getElementById("bpmSlider");
@@ -127,24 +121,8 @@ function advancePlayhead(): void {
   }
 }
 
-/**
- * Map a dynamicLevel into a PhraseStyle. Thresholds align with the
- * section PROFILES in improv-sequencer.ts: break sections (≤0.2) get
- * sparse phrases, buildup/peak (≥0.6) get dense, everything else
- * (normal/bridge) stays normal. Keep these thresholds in sync if
- * PROFILES change.
- */
-function phraseStyleFromDyn(dyn: number): PhraseStyle {
-  // Threshold raised to 0.35 so break sections (minDyn 0.25) still get
-  // sparse style. Keep in sync with PROFILES in improv-sequencer.ts.
-  if (dyn < 0.35) return "sparse";
-  if (dyn > 0.65) return "dense";
-  return "normal";
-}
-
-export function resetImprovState(): void {
-  improvState = initImprovState();
-  improvBarInSection = 0;
+export function resetImprovState(mood: Mood = "rainy"): void {
+  energyState = initEnergyState(mood);
   lastEmittedMidi = null;
   currentPhrase = null;
   phraseBarIdx = 0;
@@ -164,18 +142,28 @@ function scheduleBar(
   // additive offset around 0.5 so peak sections push complexity ABOVE
   // the user's baseline (more notes) and break sections pull it below
   // (sparser) — rather than always reducing it as a pure product would.
+  // Per-voice energy: in improv mode, comp/bass/drums each have an
+  // independent energy level that drifts semi-independently.
   let prog: readonly [Chord, Chord, Chord, Chord];
   let nextProg: readonly [Chord, Chord, Chord, Chord];
   let effectiveComplexity = complexity;
-  let dynamicLevel = 1.0;
+  let dynamicLevel = 1.0; // melody / default velocity scale
+  let compVelScale = 1.0;
+  let bassVelScale = 1.0;
+  let drumVelScale = 1.0;
   let phraseStyle: PhraseStyle = "normal";
 
   if (isImprov) {
-    prog = improvState.prog;
-    nextProg = improvState.prog; // improv has no cross-section lookahead; same prog wraps
-    dynamicLevel = improvState.dynamicLevel;
-    effectiveComplexity = Math.max(0, Math.min(1, complexity + (dynamicLevel - 0.5)));
-    phraseStyle = phraseStyleFromDyn(dynamicLevel);
+    const { melody: melEnergy, comp: compEnergy, bass: bassEnergy, drums: drumEnergy } =
+      energyState.energies;
+    prog = energyState.prog;
+    nextProg = energyState.prog; // improv has no cross-section lookahead; same prog wraps
+    dynamicLevel = melEnergy;
+    compVelScale = compEnergy;
+    bassVelScale = bassEnergy;
+    drumVelScale = drumEnergy;
+    effectiveComplexity = Math.max(0, Math.min(1, complexity + (melEnergy - 0.5)));
+    phraseStyle = melEnergy > 0.65 ? "dense" : melEnergy < 0.35 ? "sparse" : "normal";
   } else {
     prog = currentSectionProg(currentForm, {
       sectionIdx: formSectionIdx,
@@ -199,7 +187,7 @@ function scheduleBar(
 
   voicing.forEach((interval, i) => {
     const midiNote = compOct(rootMidi + interval);
-    const vel = (0.11 - i * 0.015) * dynamicLevel;
+    const vel = (0.11 - i * 0.015) * compVelScale;
     const strum = i * 0.02;
     playComp(audio, midiNote, barStart + strum, chordDur, vel, "rhodesComp", mood, currentBPM);
 
@@ -274,7 +262,7 @@ function scheduleBar(
 
   const bassNotes = walkingBassNotes(rootMidi, voicing, nextRoot);
   bassNotes.forEach((midiNote, i) => {
-    const vel = (i === 0 ? 0.3 : 0.22) * dynamicLevel;
+    const vel = (i === 0 ? 0.3 : 0.22) * bassVelScale;
     if (mood === "sleepy" && i !== 0 && i !== 2) return;
     if (effectiveComplexity < 0.3 && i !== 0 && i !== 2) return;
     if (effectiveComplexity < 0.55 && i === 3) return;
@@ -283,21 +271,19 @@ function scheduleBar(
 
   if (effectiveComplexity > 0.7 && Math.random() < (effectiveComplexity - 0.5) * 1.2) {
     const ghostMidi = bassNotes[0];
-    playBass(audio, ghostMidi, barStart + bd * 3.5, bd * 0.3, 0.12 * dynamicLevel, mood);
+    playBass(audio, ghostMidi, barStart + bd * 3.5, bd * 0.3, 0.12 * bassVelScale, mood);
   }
 
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
 
-  // Floor at 0.15 so kick/snare stay audible (as brushes) during
-  // break sections where dynamicLevel can drop near zero.
-  const drumScale = Math.max(0.15, dynamicLevel);
+  // Floor at 0.15 so kick/snare stay audible (as brushes) during sparse sections.
+  const drumScale = Math.max(0.15, drumVelScale);
 
   for (let i = 0; i < 16; i++) {
     const stepTime = swungTime(i, barStart, currentBPM, swingAmount);
 
-    // Kick and snare: break sections strip down to quarter-note kick only
+    // Kick and snare: sparse style strips down to quarter-note kick/snare only
     if (isImprov && phraseStyle === "sparse") {
-      // Break: kick on beats 1+3 only; snare on 2+4; no ghosts
       if (i === 0 || i === 8) playKick(audio, stepTime, mood, drumScale * 0.8);
       if (i === 4 || i === 12) playSnare(audio, stepTime, mood, false, drumScale * 0.7);
     } else {
@@ -308,9 +294,9 @@ function scheduleBar(
       }
     }
 
-    // Hats: section-aware variation
+    // Hats: energy-aware variation
     if (isImprov && phraseStyle === "dense") {
-      // Peak/buildup: 16th-note hi-hats for double-time drive
+      // Dense: 16th-note hi-hats for double-time drive
       const isOnBeat = i % 4 === 0;
       const vol = isOnBeat ? 0.07 : (0.022 + Math.random() * 0.018);
       playHat(audio, stepTime, mood, false, vol * drumScale);
@@ -318,7 +304,7 @@ function scheduleBar(
         playHat(audio, stepTime, mood, true, 0.07 * drumScale);
       }
     } else if (isImprov && phraseStyle === "sparse") {
-      // Break: just quiet quarter-note hats
+      // Sparse: just quiet quarter-note hats
       if (i % 4 === 0) {
         playHat(audio, stepTime, mood, false, 0.025 * drumScale);
       }
@@ -356,10 +342,10 @@ function tick(audio: AudioRefs, store: Store<AppState>): void {
     scheduleBar(audio, store, nextBarTime);
     currentProgIdx++;
     if (store.get().isImprov) {
-      improvBarInSection++;
-      if (improvBarInSection >= improvState.barsRemaining) {
-        improvState = advanceImprovSection(improvState, store.get().currentMood);
-        improvBarInSection = 0;
+      const prevAge = energyState.progBarAge;
+      energyState = stepEnergyState(energyState, store.get().currentMood, Math.random);
+      // When progBarAge resets to 0, the prog just changed — clear phrase cache.
+      if (energyState.progBarAge === 0 && prevAge > 0) {
         currentPhrase = null;
         phraseBarIdx = 0;
         lastEmittedMidi = null;
