@@ -95,7 +95,10 @@ export function generatePhrase(
       if (isCall || complexity > 0.3) {
         barMelody.push({ beat: 0, midi: anchor, dur: beatDur * 2.5 });
       }
-      // Maybe one tail note on beat 3
+      // Maybe one tail note on beat 3.
+      // 2.5 = anchor duration in beats (covers beats 1-3, leaving a rest
+      // before the optional tail). 0.3 = ~30% probability — gives sparse
+      // bars a small breath of motion without filling them in.
       if (rng() < 0.3) {
         const tail = chordTones[2] ?? chordTones[0];
         barMelody.push({ beat: beatDur * 3, midi: tail, dur: beatDur * 1.0 });

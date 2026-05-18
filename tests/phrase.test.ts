@@ -104,16 +104,10 @@ Deno.test("generatePhrase: default rng is Math.random (no throw without rng arg)
 });
 
 Deno.test("generatePhrase: sparse style emits at most 2 notes per bar", () => {
-  const prog = [
-    [0, "min7"],
-    [5, "min7"],
-    [8, "maj7"],
-    [3, "min7"],
-  ] as const;
-  const phrase = generatePhrase(prog, {
+  const phrase = generatePhrase(PROG, {
     currentKey: 0,
     complexity: 1.0,
-    beatDur: 0.75,
+    beatDur: BEAT_DUR,
     phraseStyle: "sparse",
     rng: () => 0.5,
   });
@@ -123,60 +117,43 @@ Deno.test("generatePhrase: sparse style emits at most 2 notes per bar", () => {
 });
 
 Deno.test("generatePhrase: dense style emits at least as many notes as normal", () => {
-  const prog = [
-    [0, "min7"],
-    [5, "min7"],
-    [8, "maj7"],
-    [3, "min7"],
-  ] as const;
   const opts = {
     currentKey: 0,
     complexity: 0.6,
-    beatDur: 0.75,
+    beatDur: BEAT_DUR,
     rng: () => 0.5,
   };
-  const normal = generatePhrase(prog, opts);
-  const dense = generatePhrase(prog, { ...opts, phraseStyle: "dense" });
+  const normal = generatePhrase(PROG, opts);
+  const dense = generatePhrase(PROG, { ...opts, phraseStyle: "dense" });
   const normalNotes = normal.reduce((a, b) => a + b.length, 0);
   const denseNotes = dense.reduce((a, b) => a + b.length, 0);
   assert(denseNotes >= normalNotes, `dense (${denseNotes}) < normal (${normalNotes})`);
 });
 
-Deno.test("generatePhrase: seedNote influences bar 0 anchor", () => {
-  const prog = [
-    [0, "min7"],
-    [5, "min7"],
-    [8, "maj7"],
-    [3, "min7"],
-  ] as const;
+Deno.test("generatePhrase: seedNote pulls bar 0 anchor to the nearest chord tone", () => {
+  // For bar 0 with currentKey=0 and min7 voicing [0,3,7,10], rootMidi=48
+  // gives chord tones (before melodyOct clamp) [48,51,55,58], which clamp
+  // into the melody register [60,79] as [60,63,67,70].
+  // Default anchor for a call bar is idx 1 → 63.
+  // With seedNote=70 the nearest chord tone is 70 itself, so the anchor
+  // should switch to 70.
   const opts = {
     currentKey: 0,
     complexity: 0.5,
-    beatDur: 0.75,
+    beatDur: BEAT_DUR,
     rng: () => 0.5,
   };
-  const noSeed = generatePhrase(prog, opts);
-  const farSeed = generatePhrase(prog, { ...opts, seedNote: 72 });
-  // bar 0 first note exists in both
-  assert(noSeed[0].length > 0 && farSeed[0].length > 0);
-  // With a seedNote 72 the anchor should differ from the no-seed result
-  // (unless 72 happens to match the chord-1 tone). Allow equality but not
-  // require it; the strong guarantee is that the function accepts seedNote
-  // and returns a valid phrase.
-  assertEquals(farSeed.length, 4);
+  const noSeed = generatePhrase(PROG, opts);
+  const seeded = generatePhrase(PROG, { ...opts, seedNote: 70 });
+  assertEquals(noSeed[0][0]?.midi, 63);
+  assertEquals(seeded[0][0]?.midi, 70);
 });
 
 Deno.test("generatePhrase: sparse style suppresses anticipations", () => {
-  const prog = [
-    [0, "min7"],
-    [5, "min7"],
-    [8, "maj7"],
-    [3, "min7"],
-  ] as const;
-  const phrase = generatePhrase(prog, {
+  const phrase = generatePhrase(PROG, {
     currentKey: 0,
     complexity: 1.0,
-    beatDur: 0.75,
+    beatDur: BEAT_DUR,
     phraseStyle: "sparse",
     rng: () => 0.01, // would normally trigger anticipation
   });
