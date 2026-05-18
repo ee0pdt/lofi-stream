@@ -27,14 +27,13 @@ export function applyMoodUI(mood: Mood): void {
 }
 
 /**
- * Wire each `.mood-btn` to call `onMoodSelect(mood)`. The button's
- * `data-mood` attribute is read as the mood identifier; the handler
- * does the audio crossfade (or just the UI swap if not playing).
+ * Wire each `.mood-btn[data-mood]` to call `onMoodSelect(mood)`. The
+ * Improv button (no `data-mood`) is wired separately via mountImprovUI.
  */
 export function mountMoodUI(
   onMoodSelect: (mood: Mood) => void,
 ): void {
-  document.querySelectorAll(".mood-btn").forEach((btn) => {
+  document.querySelectorAll(".mood-btn[data-mood]").forEach((btn) => {
     const el = btn as HTMLElement;
     el.addEventListener("click", () => {
       const mood = el.dataset.mood as Mood | undefined;
@@ -43,10 +42,22 @@ export function mountMoodUI(
   });
 }
 
+export function mountImprovUI(onToggle: () => void): void {
+  const btn = document.getElementById("improvBtn");
+  if (!btn) return;
+  btn.addEventListener("click", onToggle);
+}
+
 /** Toggle the "active" class on the mood button matching `mood`. */
 export function setActiveMoodButton(mood: Mood): void {
-  document.querySelectorAll(".mood-btn").forEach((b) => {
+  document.querySelectorAll(".mood-btn[data-mood]").forEach((b) => {
     const el = b as HTMLElement;
     el.classList.toggle("active", el.dataset.mood === mood);
   });
+}
+
+export function setImprovButtonState(active: boolean): void {
+  const btn = document.getElementById("improvBtn");
+  if (!btn) return;
+  btn.classList.toggle("active", active);
 }
