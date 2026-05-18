@@ -143,6 +143,9 @@ export function mountPianoRoll(
   let dpr = globalThis.devicePixelRatio || 1;
   let rafHandle = 0;
   let isRunning = false;
+  // Height (CSS px) of the bottom .sheet — kept current via ResizeObserver
+  // so the pitch range maps into the area above the controls.
+  let sheetCssH = 0;
 
   function syncSize() {
     dpr = globalThis.devicePixelRatio || 1;
@@ -174,6 +177,25 @@ export function mountPianoRoll(
   syncSize();
   if (typeof ResizeObserver !== "undefined") {
     new ResizeObserver(syncSize).observe(canvas);
+    // Observe the bottom sheet so pitch mapping shrinks to fit when the
+    // sheet grows (e.g. drawer expands). Lookup is deferred — the sheet
+    // node may not yet exist when piano-roll mounts.
+    const sheetObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) sheetCssH = rect.height;
+    });
+    const tryObserveSheet = () => {
+      const sheet = typeof document !== "undefined" ? document.querySelector(".sheet") : null;
+      if (sheet instanceof HTMLElement) {
+        sheetCssH = sheet.getBoundingClientRect().height;
+        sheetObserver.observe(sheet);
+        return true;
+      }
+      return false;
+    };
+    if (!tryObserveSheet() && typeof setTimeout === "function") {
+      [50, 200, 800].forEach((t) => setTimeout(tryObserveSheet, t));
+    }
   }
   // The deferred resize fan-out is a browser-only safety net for
   // late-arriving layout (PWA viewport quirks). Skip it in headless
@@ -189,7 +211,10 @@ export function mountPianoRoll(
 
   function pitchToY(midi: number): number {
     const m = Math.max(MIDI_LO, Math.min(MIDI_HI, midi));
-    return visH * (1 - (m - MIDI_LO) / (MIDI_HI - MIDI_LO));
+    // Reserve the lower band for the bottom .sheet; map pitches into the
+    // strip above it so the lowest MIDI sits just above the controls.
+    const effectiveH = Math.max(40, visH - sheetCssH * dpr);
+    return effectiveH * (1 - (m - MIDI_LO) / (MIDI_HI - MIDI_LO));
   }
 
   function bucketFor(v: RollVoice): Uint16Array {
