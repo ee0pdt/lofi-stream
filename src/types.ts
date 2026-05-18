@@ -90,7 +90,8 @@ export interface Settings {
   readonly drums: number;
   readonly bass: number;
   readonly comp: number;
-  readonly melody: number;
+  readonly melody1: number;
+  readonly melody2: number;
   readonly hiss: number;
   readonly scratches: number;
   readonly hum: number;
