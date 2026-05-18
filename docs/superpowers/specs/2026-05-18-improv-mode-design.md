@@ -82,21 +82,21 @@ improv: {
 }
 ```
 
-`sleepy` and `rainy` get lower `peakDensityCap` (~0.7); `cafe` and `late` get higher (~1.0). `bridgeSubstitutions` is a 4-chord array used in place of the normal `prog` during `bridge` sections.
+`sleepy` and `rainy` get lower `peakDensityCap` (~0.7); `cafe` and `late` get higher (~1.0). `bridgeSubstitutions` is exactly 4 chords as `[rootOffsetSemitones, voicingName]` pairs — the same constraint as `FORMS` progs, and voicing names must exist in `VOICINGS`. Used in place of the normal `prog` during `bridge` sections.
 
 ### `src/audio/scheduler.ts` — changes
 
 `scheduleBar` reads `store.get().isImprov`. When true:
 - Calls `advanceImprovSection` at the end of each section (instead of the fixed form loop).
 - Derives `phraseStyle` from `dynamicLevel`: `< 0.25` → `sparse`, `> 0.65` → `dense`, else `normal`.
-- Passes `dynamicLevel` as an additional velocity/gain scalar to `playComp`, `playBass`, and the drum step scheduler (scales kick/snare velocity, not hat).
-- Passes the last note of the previous phrase's call bars as `seedNote` into the next `generatePhrase` call.
+- Passes `dynamicLevel` as an additional velocity/gain scalar to `playComp`, `playBass`, and the drum step scheduler (scales kick/snare velocity, not hat; floor of `0.15` so break sections retain a brush feel rather than full silence).
+- Passes the last note of the previous phrase's call bars as `seedNote` into the next `generatePhrase` call. `seedNote` resets to `null` at each new section boundary so phrasing starts fresh after a section change.
 
 When Improv is off, `scheduleBar` is unchanged.
 
 ### `src/ui/mood-ui.ts` — changes
 
-Adds the Improv button to the mood row. Clicking it dispatches `store.set({ isImprov: !isImprov })`. Mood switches reset `isImprov` to `false` and call `initImprovState()` to reset arc state.
+Adds the Improv button to the mood row. Clicking it dispatches `store.set({ isImprov: !isImprov })`. Mood switches reset `isImprov` to `false` — the scheduler's `newProgression` call (triggered by mood change) also calls `initImprovState()` to reset arc state so a subsequent Improv activation always starts fresh.
 
 ## Data flow
 
