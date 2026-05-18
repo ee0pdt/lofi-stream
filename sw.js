@@ -4,7 +4,7 @@
 
 /* global self, caches, fetch */
 
-const CACHE_VERSION = "lofi-v4-improv";
+const CACHE_VERSION = "lofi-v4-improv-lanes";
 const PRECACHE = [
   "./",
   "./dist/main.js",
