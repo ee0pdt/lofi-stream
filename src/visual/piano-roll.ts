@@ -1,9 +1,10 @@
 /**
  * Per-note visualisation buffer + canvas renderer for the piano roll
- * shown in the player's `#vis` canvas. The scheduler calls `recordNote`
- * once for every scheduled musical event; the renderer's animation
- * frame loop reads the buffer and draws rectangles positioned by time
- * and pitch, coloured by voice.
+ * shown in the fullscreen `#vis` canvas above the gaussian blobs.
+ * `recordNote` is a module-level free function: the scheduler writes
+ * into a ring buffer that `mountPianoRoll`'s renderer reads from.
+ * Pruning is lazy (only on overflow + stale-head), draw passes batch
+ * by voice colour, and the render loop runs only between play/pause.
  */
 
 export type RollVoice = "chords" | "bass" | "mel1" | "mel2";
@@ -15,11 +16,54 @@ export interface RollNote {
   readonly voice: RollVoice;
 }
 
+export interface PianoRoll {
+  play(): void;
+  pause(): void;
+  clear(): void;
+}
+
 const CAPACITY = 256;
 const buffer: RollNote[] = [];
 let writeIdx = 0;
 
+// Track the slice of the canvas-visible window in seconds for lazy-prune.
+// `recordNote` doesn't know the current playhead, so we keep a hint that
+// the renderer refreshes each frame.
+let lastHalfSec = 8; // safe default; renderer keeps it current
+let lastNow = 0;
+
+function resetBuffer(): void {
+  buffer.length = 0;
+  writeIdx = 0;
+}
+
+function oldestIndex(): number {
+  return buffer.length < CAPACITY ? 0 : writeIdx;
+}
+
+function maybeLazyPrune(): void {
+  if (buffer.length < CAPACITY) return;
+  const oldest = buffer[oldestIndex()];
+  if (!oldest) return;
+  // Only compact when the oldest note has fully scrolled off the past edge.
+  if (oldest.time + oldest.dur >= lastNow - lastHalfSec) return;
+  const cutoff = lastNow - lastHalfSec;
+  const kept: RollNote[] = [];
+  for (let i = 0; i < CAPACITY; i++) {
+    const n = buffer[(writeIdx + i) % CAPACITY];
+    if (n.time + n.dur >= cutoff) kept.push(n);
+  }
+  buffer.length = 0;
+  for (const n of kept) buffer.push(n);
+  writeIdx = 0;
+}
+
 export function recordNote(note: RollNote): void {
+  if (buffer.length < CAPACITY) {
+    buffer.push(note);
+    return;
+  }
+  maybeLazyPrune();
   if (buffer.length < CAPACITY) {
     buffer.push(note);
   } else {
@@ -52,55 +96,91 @@ type Ctx2D = CanvasRenderingContext2D & {
 };
 
 interface VoiceStyle {
-  readonly fill: string; // rgba
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
 }
 
-const VOICE_STYLE: Record<RollVoice, VoiceStyle> = {
-  chords: { fill: "rgba(212, 164, 86, 0.70)" }, // amber
-  bass: { fill: "rgba(122, 95, 184, 0.70)" }, // deep purple
-  mel1: { fill: "rgba(232, 122, 107, 0.70)" }, // coral
-  mel2: { fill: "rgba(95, 184, 168, 0.70)" }, // teal
+// Base alpha is 0.45 (down from 0.70) to compensate for additive blending.
+const VOICE_RGB: Record<RollVoice, VoiceStyle> = {
+  chords: { r: 212, g: 164, b: 86 }, // amber
+  bass: { r: 122, g: 95, b: 184 }, // deep purple
+  mel1: { r: 232, g: 122, b: 107 }, // coral
+  mel2: { r: 95, g: 184, b: 168 }, // teal
 };
+const VOICE_ORDER: readonly RollVoice[] = ["chords", "bass", "mel1", "mel2"];
+const BASE_ALPHA = 0.45;
 
 const MIDI_LO = 36;
 const MIDI_HI = 84;
-const NOTE_HEIGHT_PX = 3;
-const PLAYHEAD_RGBA = "rgba(255,255,255,0.32)";
-const FADE_FILL = "rgba(0,0,0,0.08)";
+const PLAYHEAD_RGBA = "rgba(255,255,255,0.45)";
+
+// Per-voice index buckets (indices into `buffer` after walking ring order).
+// Pre-allocated once and reused each frame to avoid allocation churn.
+const chordsIdx = new Uint16Array(CAPACITY);
+const bassIdx = new Uint16Array(CAPACITY);
+const mel1Idx = new Uint16Array(CAPACITY);
+const mel2Idx = new Uint16Array(CAPACITY);
 
 export function mountPianoRoll(
   canvas: HTMLCanvasElement,
   getAudioCtx: () => AudioContext | null,
   getBeatDur: () => number,
-): void {
+): PianoRoll {
   const ctx = canvas.getContext("2d") as Ctx2D | null;
-  if (!ctx) return;
+  // Even if the 2D context is unavailable, return a no-op PianoRoll so
+  // callers can still wire lifecycle hooks without conditional code.
+  if (!ctx) {
+    return { play() {}, pause() {}, clear() {} };
+  }
+
+  // Additive blend: notes bloom against the gaussian-blob background.
+  // Set once at mount — never toggled per-frame.
+  ctx.globalCompositeOperation = "lighter";
 
   let visW = 0;
   let visH = 0;
   let dpr = globalThis.devicePixelRatio || 1;
+  let rafHandle = 0;
+  let isRunning = false;
 
   function syncSize() {
     dpr = globalThis.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    let cssW = rect.width;
-    if (cssW < 2 && canvas.parentElement) {
-      cssW = canvas.parentElement.getBoundingClientRect().width;
+    // Fullscreen canvas: prefer visualViewport, fall back to inner*, then
+    // to the canvas's own bounding box (headless test environments have
+    // no window dimensions but mock canvases still report a BCR).
+    const vv = globalThis.visualViewport;
+    let cssW = vv ? vv.width : globalThis.innerWidth;
+    let cssH = vv ? vv.height : globalThis.innerHeight;
+    if (!cssW || !cssH) {
+      const rect = canvas.getBoundingClientRect?.();
+      if (rect) {
+        cssW = rect.width;
+        cssH = rect.height;
+      }
     }
-    if (cssW < 2) cssW = globalThis.innerWidth - 40;
-    const cssH = 56;
+    if (!cssW || !cssH) return;
     const newW = Math.max(4, Math.round(cssW * dpr));
     const newH = Math.max(4, Math.round(cssH * dpr));
     if (canvas.width !== newW) canvas.width = newW;
     if (canvas.height !== newH) canvas.height = newH;
     visW = newW;
     visH = newH;
+    // Canvas resize resets composite-op on some implementations.
+    ctx!.globalCompositeOperation = "lighter";
   }
 
+  // Initial sizing so clear()/play() can rely on visW/visH immediately.
+  syncSize();
   if (typeof ResizeObserver !== "undefined") {
     new ResizeObserver(syncSize).observe(canvas);
   }
-  [0, 100, 300, 800, 2000].forEach((t) => setTimeout(syncSize, t));
+  // The deferred resize fan-out is a browser-only safety net for
+  // late-arriving layout (PWA viewport quirks). Skip it in headless
+  // test environments where it would leak timers.
+  if (typeof document !== "undefined") {
+    [0, 100, 300, 800, 2000].forEach((t) => setTimeout(syncSize, t));
+  }
   globalThis.addEventListener("resize", syncSize);
   globalThis.addEventListener("orientationchange", () => setTimeout(syncSize, 250));
   if (globalThis.visualViewport) {
@@ -112,65 +192,148 @@ export function mountPianoRoll(
     return visH * (1 - (m - MIDI_LO) / (MIDI_HI - MIDI_LO));
   }
 
+  function bucketFor(v: RollVoice): Uint16Array {
+    switch (v) {
+      case "chords":
+        return chordsIdx;
+      case "bass":
+        return bassIdx;
+      case "mel1":
+        return mel1Idx;
+      case "mel2":
+        return mel2Idx;
+    }
+  }
+
   function frame() {
-    requestAnimationFrame(frame);
     if (visW < 4 || visH < 4) {
       syncSize();
-      if (visW < 4) return;
+      if (visW < 4) {
+        if (isRunning) rafHandle = requestAnimationFrame(frame);
+        return;
+      }
     }
 
-    // Fade older content (semi-transparent black fill on top of last frame).
-    ctx!.fillStyle = FADE_FILL;
-    ctx!.fillRect(0, 0, visW, visH);
+    // Additive composite means a black fill is a no-op; wipe instead.
+    ctx!.clearRect(0, 0, visW, visH);
 
     const actx = getAudioCtx();
     const now = actx ? actx.currentTime : 0;
     const beatDur = getBeatDur();
-    if (beatDur <= 0) return; // not yet started
+    if (beatDur <= 0) {
+      if (isRunning) rafHandle = requestAnimationFrame(frame);
+      return;
+    }
 
-    // Window: 4 bars total, centred on playhead (2 bars past, 2 bars future).
-    // 4 bars × 4 beats/bar × beatDur = 16 × beatDur seconds total → halfSec = 8 × beatDur.
+    // Window: 4 bars total, centred on playhead (2 past, 2 future).
     const halfSec = 8 * beatDur;
+    lastHalfSec = halfSec;
+    lastNow = now;
 
-    pruneOlderThan(now - halfSec);
+    const noteHeight = Math.max(3, Math.round(visH / 80));
+    const len = buffer.length;
+    const start = len < CAPACITY ? 0 : writeIdx;
 
-    const notes = snapshotInOrder();
-    const noteHeight = Math.max(2, NOTE_HEIGHT_PX * dpr);
-
-    for (const n of notes) {
-      const rel = n.time - now; // negative = past, positive = future
+    // Bucket pass: O(len), per-voice counters.
+    let cN = 0, bN = 0, m1N = 0, m2N = 0;
+    for (let i = 0; i < len; i++) {
+      const idx = (start + i) % CAPACITY;
+      const n = buffer[idx];
+      const rel = n.time - now;
       if (rel > halfSec || rel + n.dur < -halfSec) continue;
-      const xCenter = visW * (0.5 + rel / (2 * halfSec));
-      const w = Math.max(2, (n.dur / (2 * halfSec)) * visW);
-      const y = pitchToY(n.midi);
-      ctx!.fillStyle = VOICE_STYLE[n.voice].fill;
-      // Rounded-rect: tiny radius. Fall back to fillRect on no-roundRect.
-      const r = Math.min(noteHeight / 2, 1.5 * dpr);
-      ctx!.beginPath();
-      if (typeof ctx!.roundRect === "function") {
-        ctx!.roundRect(xCenter, y - noteHeight / 2, w, noteHeight, r);
-        ctx!.fill();
-      } else {
-        ctx!.fillRect(xCenter, y - noteHeight / 2, w, noteHeight);
+      switch (n.voice) {
+        case "chords":
+          chordsIdx[cN++] = idx;
+          break;
+        case "bass":
+          bassIdx[bN++] = idx;
+          break;
+        case "mel1":
+          mel1Idx[m1N++] = idx;
+          break;
+        case "mel2":
+          mel2Idx[m2N++] = idx;
+          break;
       }
     }
+    const counts = [cN, bN, m1N, m2N];
+
+    // Draw pass: exactly one fillStyle write per voice. Per-note fade is
+    // applied via `globalAlpha` (cheap state change), so fillStyle stays
+    // batched at one write per voice as §5.3 specifies.
+    const r2 = 1.5 * dpr;
+    const cheapThresh = 4 * dpr;
+    for (let v = 0; v < 4; v++) {
+      const voice = VOICE_ORDER[v];
+      const n = counts[v];
+      if (n === 0) continue;
+      const bucket = bucketFor(voice);
+      const rgb = VOICE_RGB[voice];
+      ctx!.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},1)`;
+      for (let j = 0; j < n; j++) {
+        const note = buffer[bucket[j]];
+        const rel = note.time - now;
+        const fade = rel < 0 ? Math.max(0, 1 + rel / halfSec) : 1;
+        const a = BASE_ALPHA * fade;
+        if (a <= 0) continue;
+        ctx!.globalAlpha = a;
+        const xCenter = visW * (0.5 + rel / (2 * halfSec));
+        const w = Math.max(2, (note.dur / (2 * halfSec)) * visW);
+        const y = pitchToY(note.midi) - noteHeight / 2;
+        if (w < cheapThresh || typeof ctx!.roundRect !== "function") {
+          ctx!.fillRect(xCenter, y, w, noteHeight);
+        } else {
+          ctx!.beginPath();
+          ctx!.roundRect(xCenter, y, w, noteHeight, Math.min(noteHeight / 2, r2));
+          ctx!.fill();
+        }
+      }
+    }
+    ctx!.globalAlpha = 1;
 
     // Playhead at canvas centre.
     ctx!.fillStyle = PLAYHEAD_RGBA;
     ctx!.fillRect(visW / 2 - dpr / 2, 0, Math.max(1, dpr), visH);
+
+    if (isRunning) rafHandle = requestAnimationFrame(frame);
   }
 
-  frame();
+  // Expose the inner render once for tests via the __renderFrame helper below.
+  lastFrame = frame;
+
+  return {
+    play() {
+      if (isRunning) return;
+      isRunning = true;
+      rafHandle = requestAnimationFrame(frame);
+    },
+    pause() {
+      if (!isRunning) return;
+      isRunning = false;
+      if (rafHandle) cancelAnimationFrame(rafHandle);
+      rafHandle = 0;
+    },
+    clear() {
+      if (visW >= 4 && visH >= 4) ctx!.clearRect(0, 0, visW, visH);
+      resetBuffer();
+    },
+  };
 }
 
 // --- test-only helpers ---
+// `lastFrame` lets the bench/test suites invoke the most recently mounted
+// renderer's draw function once against a mocked context.
+let lastFrame: (() => void) | null = null;
+
 export function __resetPianoRollForTest(): void {
-  buffer.length = 0;
-  writeIdx = 0;
+  resetBuffer();
 }
 export function __snapshotPianoRollForTest(): RollNote[] {
   return snapshotInOrder();
 }
 export function __pruneOlderThanForTest(cutoff: number): void {
   pruneOlderThan(cutoff);
+}
+export function __renderFrameForTest(): void {
+  if (lastFrame) lastFrame();
 }
