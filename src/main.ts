@@ -29,7 +29,7 @@ import {
   stopAmbience,
 } from "./audio/ambience.ts";
 import { createAmplitudeReader, mountBackground } from "./visual/background.ts";
-import { mountPianoRoll } from "./visual/piano-roll.ts";
+import { mountPianoRoll, type PianoRoll } from "./visual/piano-roll.ts";
 import { initKnobDrag, mountControls, updateKnobSvg } from "./ui/controls.ts";
 import { mountSheet } from "./ui/sheet.ts";
 import {
@@ -66,7 +66,12 @@ mountBackground(
   () => store.get().currentMood,
   createAmplitudeReader(() => audio?.analyser ?? null),
 );
-mountPianoRoll(visCanvas, () => audio?.actx ?? null, () => getCurrentBeatDur());
+const pianoRoll: PianoRoll = mountPianoRoll(
+  visCanvas,
+  () => audio?.actx ?? null,
+  () => getCurrentBeatDur(),
+  () => store.get().currentMood,
+);
 
 const controls = mountControls({
   store,
@@ -119,6 +124,7 @@ function changeMood(newMood: Mood): void {
       gainNode.connect(refs.masterGain);
       refs.trackGains[key] = gainNode;
     }
+    pianoRoll.clear();
     resetSchedulerTime(refs);
 
     store.set({ currentMood: newMood });
@@ -186,6 +192,7 @@ async function toggle(): Promise<void> {
     setTimeout(() => {
       stopScheduler();
       stopAmbience();
+      pianoRoll.pause();
     }, 520);
     store.set({ isPlaying: false });
     setPlayIcon(false);
@@ -197,6 +204,7 @@ async function toggle(): Promise<void> {
     refs.masterGain.gain.setValueAtTime(0.0001, now);
     store.set({ isPlaying: true });
     startScheduler(refs, store);
+    pianoRoll.play();
     startAmbience(refs, store.get().currentMood, store);
     startScratches(refs, store);
     refs.masterGain.gain.linearRampToValueAtTime(userVol, now + 1.2);
@@ -264,6 +272,31 @@ setActiveMoodButton(initialMood);
 controls.applyMoodSettings(initialMood);
 
 // Debug surface used by e2e tests. Present in all builds; read-only and safe to ship.
-(window as Window & { __lofi?: { actxState: () => string } }).__lofi = {
+// FPS probe: 120-frame rolling average of rAF deltas. Started on module load so
+// the sample is warm whenever DevTools reads it. Cost is one rAF wakeup per frame.
+const FPS_SAMPLES = 120;
+const fpsDeltas = new Float32Array(FPS_SAMPLES);
+let fpsWriteIdx = 0;
+let fpsFilled = 0;
+let fpsLastTs = 0;
+function fpsTick(ts: number): void {
+  if (fpsLastTs !== 0) {
+    fpsDeltas[fpsWriteIdx] = ts - fpsLastTs;
+    fpsWriteIdx = (fpsWriteIdx + 1) % FPS_SAMPLES;
+    if (fpsFilled < FPS_SAMPLES) fpsFilled++;
+  }
+  fpsLastTs = ts;
+  requestAnimationFrame(fpsTick);
+}
+requestAnimationFrame(fpsTick);
+
+(window as Window & { __lofi?: { actxState: () => string; fps: () => number } }).__lofi = {
   actxState: () => audio?.actx.state ?? "not-created",
+  fps: () => {
+    if (fpsFilled === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < fpsFilled; i++) sum += fpsDeltas[i];
+    const avgMs = sum / fpsFilled;
+    return avgMs > 0 ? 1000 / avgMs : 0;
+  },
 };

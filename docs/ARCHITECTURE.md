@@ -74,6 +74,27 @@ src/
 
 `mountBackground` (in `src/visual/background.ts`) tries WebGPU first. If unavailable or it throws, falls back to `startCanvas2D`. Both render five drifting Gaussian blobs over a per-mood base colour; blob radius pulses on a smoothed amplitude value supplied by `createAmplitudeReader` (which polls `audio.analyser` per frame).
 
+## Piano-roll visualiser
+
+`mountPianoRoll` (in `src/visual/piano-roll.ts`) renders incoming notes as a horizontally scrolling roll. The canvas (`#vis`) is a fullscreen overlay (`position: fixed; inset: 0; z-index: 1`) layered above the gaussian `#bg` (z-index 0) and below the bottom `.sheet` (z-index 10), so the roll shares the same full-bleed region as the blobs while the player card continues to occlude the bottom strip. The canvas is composited with `globalCompositeOperation = 'lighter'` (set once at mount), giving notes additive bloom against the gaussian backdrop; voice alphas are tuned so overlaps don't clip to white. Note height scales with viewport (`Math.max(3, Math.round(visH / 80))`) and resizes track the existing `ResizeObserver` + `visualViewport` listeners.
+
+The scheduler writes events through a free `recordNote(time, midi, dur, voice)` function into a 256-slot module-level ring buffer. Pruning is **lazy** — `recordNote` checks the oldest slot only when the buffer is full and discards entries whose `time + dur` falls outside the visible window. The render loop never allocates.
+
+`mountPianoRoll` returns a `PianoRoll` with an explicit `play() / pause() / clear()` lifecycle rather than a perpetual `rAF`:
+
+- `play()` arms the render loop (no-op if already running).
+- `pause()` cancels the pending `rAF` handle and leaves the last painted frame on the canvas — the gaussian blobs keep drifting behind it.
+- `clear()` wipes the canvas via `clearRect` and drains the ring buffer; the running state is preserved.
+
+Each frame walks the ring in place and bins note indices by voice into four pre-allocated `Uint16Array`s. The draw pass then issues exactly four `fillStyle` writes per frame — one per voice — instead of one per note. Short notes (`w < 4 * dpr`) skip the `beginPath` + `roundRect` path and use `fillRect` directly.
+
+Hooks in `src/main.ts`:
+
+- `toggle()` calls `pianoRoll.play()` alongside `startScheduler` on the play branch, and `pianoRoll.pause()` alongside `stopScheduler` on the pause branch.
+- `changeMood()` calls `pianoRoll.clear()` inside the same `setTimeout` that severs the track gains, so the visual wipe lands on the audio cross-fade boundary and notes from the previous mood don't scroll across the new one.
+
+`window.__lofi.fps()` exposes a 120-frame rolling average of `rAF` deltas for in-browser perf checks; Deno-level benchmarks live in [`tests/piano-roll.bench.ts`](../tests/piano-roll.bench.ts) (render hot path + `recordNote` hot path).
+
 ## Music generation
 
 Deterministic-form / probabilistic-content system — the chord sequence is fixed per mood, but voicings, melodies, and ornaments are sampled fresh each bar.

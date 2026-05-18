@@ -73,6 +73,19 @@
         z-index: 0;
       }
 
+      /* ── Piano-roll visualiser canvas ── */
+      /* width/height: 100% pin the CSS box to the viewport so the canvas's
+         intrinsic bitmap size can't leak back through getBoundingClientRect
+         and feedback-loop syncSize. */
+      #vis {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
       /* ── Bottom sheet ── */
       .sheet {
         position: fixed;
@@ -180,20 +193,6 @@
         margin-top: 2px;
       }
 
-      /* ── Visualiser ── */
-      .wave-wrap {
-        margin: 4px -20px 2px;
-        height: 56px;
-        overflow: hidden;
-        background: rgba(0, 0, 0, 0.18);
-        position: relative;
-      }
-      #vis {
-        display: block;
-        width: 100%;
-        height: 56px;
-      }
-
       /* ── Mood row ── */
       .mood-row {
         display: flex;
@@ -284,10 +283,10 @@
         pointer-events: none;
       }
       .improv-toggle.active {
-        color: #e8b07a;
+        color: var(--warm2);
       }
       .improv-toggle.active .switch-track {
-        background: #34c759;
+        background: var(--warm);
       }
       .improv-toggle.active .switch-thumb {
         left: 20px;
@@ -623,6 +622,7 @@
     <!-- Generative background -->
 
     <canvas id="bg"></canvas>
+    <canvas id="vis"></canvas>
 
     <!-- Bottom sheet -->
 
@@ -650,11 +650,6 @@
             <span class="key-val" id="keyVal">&mdash;</span>
             <span class="key-lbl">key</span>
           </div>
-        </div>
-
-        <!-- Waveform -->
-        <div class="wave-wrap">
-          <canvas id="vis" width="400" height="56"></canvas>
         </div>
 
         <!-- Mood -->
