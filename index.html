@@ -234,36 +234,33 @@
         color: #1a0e04;
       }
       /* ── Improv toggle switch (lives in the mood row) ── */
+      /* No pill container: just a label sitting next to the switch. */
       .improv-toggle {
         font-family:
           'DM Mono',
           monospace;
         font-size: 0.62rem;
         letter-spacing: 0.06em;
-        padding: 7px 12px 7px 10px;
-        border-radius: 20px;
-        border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.05);
+        padding: 0 4px 0 10px;
         color: var(--dim);
         cursor: pointer;
         white-space: nowrap;
         flex-shrink: 0;
-        transition:
-          color 0.15s,
-          background 0.15s,
-          border-color 0.15s;
+        transition: color 0.15s;
         min-height: 34px;
         display: inline-flex;
         align-items: center;
         gap: 8px;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
+        background: transparent;
+        border: none;
       }
       .improv-toggle:active {
         opacity: 0.8;
       }
       .improv-toggle .switch-track {
-        width: 28px;
+        width: 30px;
         height: 16px;
         border-radius: 10px;
         background: rgba(255, 255, 255, 0.08);
@@ -289,8 +286,6 @@
         pointer-events: none;
       }
       .improv-toggle.active {
-        background: rgba(216, 168, 109, 0.12);
-        border-color: #d8a86d;
         color: #e8b07a;
       }
       .improv-toggle.active .switch-track {
@@ -298,7 +293,7 @@
         border-color: #d8a86d;
       }
       .improv-toggle.active .switch-thumb {
-        left: 13px;
+        left: 15px;
         background: #1a0e04;
       }
 
