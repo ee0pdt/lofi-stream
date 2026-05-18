@@ -2,12 +2,12 @@ import { assertEquals } from "jsr:@std/assert@^1";
 import { initEnergyState, stepEnergyState } from "../src/music/improv-energy.ts";
 import { MOOD_META } from "../src/music/moods.ts";
 
-Deno.test("initEnergyState: all energies start at 0.5", () => {
+Deno.test("initEnergyState: all energies start in [0.1, cap] and progBarAge is 0", () => {
+  const cap = MOOD_META.rainy.improv.peakDensityCap;
   const s = initEnergyState("rainy");
-  assertEquals(s.energies.melody, 0.5);
-  assertEquals(s.energies.comp, 0.5);
-  assertEquals(s.energies.bass, 0.5);
-  assertEquals(s.energies.drums, 0.5);
+  for (const e of [s.energies.melody, s.energies.comp, s.energies.bass, s.energies.drums]) {
+    assertEquals(e >= 0.1 && e <= cap, true, `init energy ${e} out of range`);
+  }
   assertEquals(s.progBarAge, 0);
 });
 

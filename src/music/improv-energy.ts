@@ -23,7 +23,7 @@ export interface EnergyState {
 }
 
 const ENERGY_FLOOR = 0.1;
-const DRIFT_STEP = 0.12;
+const DRIFT_STEP = 0.18;
 const TRADE_LEAD_NUDGE = 0.04;
 const TRADE_OTHER_NUDGE = -0.02;
 
@@ -40,9 +40,11 @@ function pickProg(
   return form[idx].prog;
 }
 
-export function initEnergyState(mood: Mood): EnergyState {
+export function initEnergyState(mood: Mood, rng: () => number = Math.random): EnergyState {
+  const cap = MOOD_META[mood].improv.peakDensityCap;
+  const rand = () => clamp(0.3 + rng() * 0.5, ENERGY_FLOOR, cap);
   return {
-    energies: { melody: 0.5, comp: 0.5, bass: 0.5, drums: 0.5 },
+    energies: { melody: rand(), comp: rand(), bass: rand(), drums: rand() },
     prog: FORMS[mood][0].prog,
     progBarAge: 0,
   };
