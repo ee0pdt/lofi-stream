@@ -72,8 +72,11 @@ export function startNextPhrase(state: VoiceState, opts: VoiceAdvanceOptions): V
     }
   }
 
-  const phraseStyle: PhraseStyle =
-    state.role === "support" ? "sparse" : mode === "improv" ? "dense" : "normal";
+  const phraseStyle: PhraseStyle = state.role === "support"
+    ? "sparse"
+    : mode === "improv"
+    ? "dense"
+    : "normal";
 
   // Support seeds from the LEAD's last note; lead self-seeds.
   const seedNote = state.role === "support"
