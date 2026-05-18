@@ -55,10 +55,11 @@ export function playMelodyTimbre(
   voice: 1 | 2 = 1,
 ): void {
   const melBus = voice === 1 ? audio.trackGains.melody1 : audio.trackGains.melody2;
-  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role, melBus);
-  else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role, melBus);
-  else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role, melBus);
-  else playRhodes(audio, midi, time, dur, vel, role, melBus);
+  const melRowId = voice === 1 ? "mx-melody1" : "mx-melody2";
+  if (timbre === "vibraphone") playVibraphone(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else if (timbre === "celesta") playCelesta(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else if (timbre === "bell") playBell(audio, midi, time, dur, vel, role, melBus, melRowId);
+  else playRhodes(audio, midi, time, dur, vel, role, melBus, melRowId);
 }
 
 export function playBass(

@@ -14,8 +14,10 @@ export function playCelesta(
   vel = 0.1,
   role = "rhodesComp",
   melBus: GainNode = audio.trackGains.melody1,
+  melRowId?: string,
 ): void {
-  const { rowId } = roleRouting(role);
+  const { rowId: defaultRow } = roleRouting(role);
+  const rowId = melRowId ?? defaultRow;
   flashRow(audio.actx, rowId, time, 90);
   const freq = midiToFreq(midi + 12);
   const osc = audio.actx.createOscillator();
