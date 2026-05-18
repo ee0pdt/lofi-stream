@@ -156,14 +156,14 @@ function scheduleBar(
   // additive offset around 0.5 so peak sections push complexity ABOVE
   // the user's baseline (more notes) and break sections pull it below
   // (sparser) — rather than always reducing it as a pure product would.
-  // Per-voice energy: in improv mode, comp/bass/drums each have an
-  // independent energy level that drifts semi-independently.
+  // Per-voice energy: in improv mode, comp and bass subtly breathe via a
+  // compressed velocity range. Drums stay at a constant scale — they're the
+  // steady backbone, not an expressive voice.
   let prog: readonly [Chord, Chord, Chord, Chord];
   let nextProg: readonly [Chord, Chord, Chord, Chord];
   let effectiveComplexity = complexity;
   let compVelScale = 1.0;
   let bassVelScale = 1.0;
-  let drumVelScale = 1.0;
   let phraseStyle: PhraseStyle = "normal";
 
   // Melody always follows the form. Comp/bass may use energyState.prog in
@@ -175,13 +175,13 @@ function scheduleBar(
   });
 
   if (isImprov) {
-    const { melody: melEnergy, comp: compEnergy, bass: bassEnergy, drums: drumEnergy } =
-      energyState.energies;
+    const { melody: melEnergy, comp: compEnergy, bass: bassEnergy } = energyState.energies;
     prog = energyState.prog;
     nextProg = energyState.prog;
-    compVelScale = compEnergy;
-    bassVelScale = bassEnergy;
-    drumVelScale = drumEnergy;
+    // Compress comp/bass loudness scaling so energy drift breathes rather than
+    // swings audibly. Energy ∈ [0.1, cap] maps to vel scale ∈ [0.775, 1.0].
+    compVelScale = 0.75 + 0.25 * compEnergy;
+    bassVelScale = 0.75 + 0.25 * bassEnergy;
     effectiveComplexity = Math.max(0, Math.min(1, complexity + (melEnergy - 0.5)));
     phraseStyle = melEnergy > 0.65 ? "dense" : melEnergy < 0.35 ? "sparse" : "normal";
   } else {
@@ -432,37 +432,28 @@ function scheduleBar(
 
   const kickPat = mood === "sleepy" || mood === "late" ? KICK_PAT_SOFT : KICK_PAT_NORMAL;
 
-  // Floor at 0.15 so kick/snare stay audible (as brushes) during sparse sections.
-  const drumScale = Math.max(0.15, drumVelScale);
+  // Drums hold a constant velocity scale regardless of energy — the kit is the
+  // backbone. Energy-driven variation lives only in the dense-hats branch below.
+  const drumScale = 1.0;
 
   for (let i = 0; i < 16; i++) {
     const stepTime = swungTime(i, barStart, currentBPM, swingAmount);
 
-    // Kick and snare: sparse style strips down to quarter-note kick/snare only
-    if (isImprov && phraseStyle === "sparse") {
-      if (i === 0 || i === 8) playKick(audio, stepTime, mood, drumScale * 0.8);
-      if (i === 4 || i === 12) playSnare(audio, stepTime, mood, false, drumScale * 0.7);
-    } else {
-      if (kickPat[i]) playKick(audio, stepTime, mood, drumScale);
-      if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false, drumScale);
-      if (GHOST_PAT[i] && Math.random() < effectiveComplexity * 0.7) {
-        playSnare(audio, stepTime, mood, true, drumScale);
-      }
+    // Kick/snare always follow the normal pattern; ghost-snare density tracks
+    // overall complexity.
+    if (kickPat[i]) playKick(audio, stepTime, mood, drumScale);
+    if (SNARE_PAT[i]) playSnare(audio, stepTime, mood, false, drumScale);
+    if (GHOST_PAT[i] && Math.random() < effectiveComplexity * 0.7) {
+      playSnare(audio, stepTime, mood, true, drumScale);
     }
 
-    // Hats: energy-aware variation
+    // Hats: dense melody energy adds 16th-note drive; otherwise normal pattern.
     if (isImprov && phraseStyle === "dense") {
-      // Dense: 16th-note hi-hats for double-time drive
       const isOnBeat = i % 4 === 0;
       const vol = isOnBeat ? 0.07 : (0.022 + Math.random() * 0.018);
       playHat(audio, stepTime, mood, false, vol * drumScale);
       if (OPEN_PAT[i] && mood !== "sleepy") {
         playHat(audio, stepTime, mood, true, 0.07 * drumScale);
-      }
-    } else if (isImprov && phraseStyle === "sparse") {
-      // Sparse: just quiet quarter-note hats
-      if (i % 4 === 0) {
-        playHat(audio, stepTime, mood, false, 0.025 * drumScale);
       }
     } else {
       if (HAT_PAT[i]) {
