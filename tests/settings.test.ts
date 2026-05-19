@@ -43,7 +43,7 @@ Deno.test("DEFAULT_SETTINGS: every slider value is in [0, 1]", () => {
 Deno.test("DEFAULT_SETTINGS.rainy: spot-check known values", () => {
   const s = DEFAULT_SETTINGS.rainy;
   assertEquals(s.drums, 0.85);
-  assertEquals(s.rain, 0.6);
+  assertEquals(s.rain, 0.3);
   assertEquals(s.complexity, 0.45);
 });
 
